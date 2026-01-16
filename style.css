@@ -216,85 +216,165 @@ footer {
     }
 }
 
-/* Ninja pixel art */
+/* Ninja pixel art - Chrome Dino style */
 .ninja {
     position: fixed;
     bottom: 20px;
-    left: 40px;
-    width: 32px;
-    height: 32px;
+    left: 60px;
+    width: 48px;
+    height: 48px;
     cursor: pointer;
     z-index: 1000;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
+    transition: transform 0.1s ease;
 }
 
-/* Ninja sprite - standing pose */
+/* Ninja sprite - standing pose (Chrome dino inspired) */
 .ninja::before {
     content: '';
     position: absolute;
-    width: 32px;
-    height: 32px;
+    width: 48px;
+    height: 48px;
     background-image:
-        linear-gradient(90deg, transparent 8px, var(--ninja-color) 8px, var(--ninja-color) 24px, transparent 24px),
-        linear-gradient(90deg, transparent 10px, var(--ninja-color) 10px, var(--ninja-color) 22px, transparent 22px),
-        linear-gradient(90deg, transparent 12px, var(--ninja-color) 12px, var(--ninja-color) 20px, transparent 20px),
-        linear-gradient(90deg, transparent 6px, var(--ninja-color) 6px, var(--ninja-color) 26px, transparent 26px),
-        linear-gradient(90deg, transparent 8px, var(--ninja-color) 8px, var(--ninja-color) 24px, transparent 24px),
-        linear-gradient(90deg, transparent 10px, var(--ninja-color) 10px, var(--ninja-color) 22px, transparent 22px),
-        linear-gradient(90deg, transparent 10px, var(--ninja-color) 10px, var(--ninja-color) 14px, transparent 14px, transparent 18px, var(--ninja-color) 18px, var(--ninja-color) 22px, transparent 22px);
-    background-size: 32px 4px;
-    background-position: 0 4px, 0 8px, 0 12px, 0 16px, 0 20px, 0 24px, 0 28px;
+        /* Head/mask */
+        linear-gradient(90deg, transparent 16px, var(--ninja-color) 16px, var(--ninja-color) 32px, transparent 32px),
+        linear-gradient(90deg, transparent 14px, var(--ninja-color) 14px, var(--ninja-color) 34px, transparent 34px),
+        linear-gradient(90deg, transparent 12px, var(--ninja-color) 12px, var(--ninja-color) 36px, transparent 36px),
+        /* Eyes */
+        linear-gradient(90deg, transparent 14px, var(--ninja-color) 14px, var(--ninja-color) 18px, transparent 18px, transparent 20px, var(--ninja-bg) 20px, var(--ninja-bg) 22px, transparent 22px, transparent 26px, var(--ninja-bg) 26px, var(--ninja-bg) 28px, transparent 28px, transparent 30px, var(--ninja-color) 30px, var(--ninja-color) 34px, transparent 34px),
+        /* Neck/shoulders */
+        linear-gradient(90deg, transparent 14px, var(--ninja-color) 14px, var(--ninja-color) 34px, transparent 34px),
+        /* Body - upper */
+        linear-gradient(90deg, transparent 12px, var(--ninja-color) 12px, var(--ninja-color) 36px, transparent 36px),
+        linear-gradient(90deg, transparent 12px, var(--ninja-color) 12px, var(--ninja-color) 36px, transparent 36px),
+        linear-gradient(90deg, transparent 12px, var(--ninja-color) 12px, var(--ninja-color) 36px, transparent 36px),
+        /* Body - lower */
+        linear-gradient(90deg, transparent 14px, var(--ninja-color) 14px, var(--ninja-color) 34px, transparent 34px),
+        linear-gradient(90deg, transparent 14px, var(--ninja-color) 14px, var(--ninja-color) 34px, transparent 34px),
+        /* Belt */
+        linear-gradient(90deg, transparent 12px, var(--ninja-bg) 12px, var(--ninja-bg) 36px, transparent 36px),
+        /* Legs */
+        linear-gradient(90deg, transparent 14px, var(--ninja-color) 14px, var(--ninja-color) 20px, transparent 20px, transparent 28px, var(--ninja-color) 28px, var(--ninja-color) 34px, transparent 34px),
+        linear-gradient(90deg, transparent 14px, var(--ninja-color) 14px, var(--ninja-color) 20px, transparent 20px, transparent 28px, var(--ninja-color) 28px, var(--ninja-color) 34px, transparent 34px),
+        linear-gradient(90deg, transparent 14px, var(--ninja-color) 14px, var(--ninja-color) 20px, transparent 20px, transparent 28px, var(--ninja-color) 28px, var(--ninja-color) 34px, transparent 34px),
+        /* Feet */
+        linear-gradient(90deg, transparent 12px, var(--ninja-color) 12px, var(--ninja-color) 22px, transparent 22px, transparent 26px, var(--ninja-color) 26px, var(--ninja-color) 36px, transparent 36px);
+    background-size: 48px 2px;
+    background-position:
+        0 4px, 0 6px, 0 8px,  /* head */
+        0 10px, /* eyes */
+        0 12px, /* neck */
+        0 14px, 0 16px, 0 18px, /* body upper */
+        0 20px, 0 22px, /* body lower */
+        0 24px, /* belt */
+        0 26px, 0 28px, 0 30px, /* legs */
+        0 32px; /* feet */
     background-repeat: no-repeat;
 }
 
 :root {
-    --ninja-color: #000000;
+    --ninja-color: #535353;
+    --ninja-bg: #ffffff;
 }
 
 [data-theme="dark"] {
-    --ninja-color: #ffffff;
+    --ninja-color: #ababab;
+    --ninja-bg: #1a1a1a;
 }
 
-/* Ninja animations */
-@keyframes ninja-run {
-    0%, 100% {
-        transform: translateX(0) scaleX(1);
-    }
-    50% {
-        transform: translateX(50vw) scaleX(1);
-    }
-}
-
+/* Ninja animations - Chrome dino inspired */
 @keyframes ninja-jump {
-    0%, 100% {
-        bottom: 20px;
+    0% {
+        transform: translateY(0);
     }
     50% {
-        bottom: 120px;
+        transform: translateY(-100px);
+    }
+    100% {
+        transform: translateY(0);
+    }
+}
+
+@keyframes ninja-run {
+    0% {
+        left: 60px;
+    }
+    100% {
+        left: calc(50vw - 24px);
+    }
+}
+
+@keyframes ninja-leg-run {
+    0%, 100% {
+        background-position:
+            0 4px, 0 6px, 0 8px,
+            0 10px,
+            0 12px,
+            0 14px, 0 16px, 0 18px,
+            0 20px, 0 22px,
+            0 24px,
+            0 26px, 0 28px, 0 30px,
+            0 32px;
+    }
+    50% {
+        background-position:
+            0 4px, 0 6px, 0 8px,
+            0 10px,
+            0 12px,
+            0 14px, 0 16px, 0 18px,
+            0 20px, 0 22px,
+            0 24px,
+            0 27px, 0 29px, 0 31px,
+            0 33px;
     }
 }
 
 @keyframes ninja-flip {
     0% {
-        transform: rotate(0deg) scaleX(1);
+        transform: rotate(0deg);
     }
     100% {
-        transform: rotate(360deg) scaleX(1);
+        transform: rotate(360deg);
     }
 }
 
-@keyframes ninja-exit {
+@keyframes ninja-backflip {
     0% {
-        left: 50vw;
+        transform: rotate(0deg) translateY(0);
+    }
+    50% {
+        transform: rotate(180deg) translateY(-80px);
+    }
+    100% {
+        transform: rotate(360deg) translateY(0);
+    }
+}
+
+@keyframes ninja-sprint {
+    0% {
+        left: calc(50vw - 24px);
         opacity: 1;
     }
     100% {
-        left: 100vw;
-        opacity: 0;
+        left: calc(100vw + 50px);
+        opacity: 1;
+    }
+}
+
+@keyframes ninja-crouch {
+    0%, 100% {
+        transform: scaleY(1);
+    }
+    50% {
+        transform: scaleY(0.7) translateY(6px);
     }
 }
 
 .ninja.animating {
     pointer-events: none;
+}
+
+.ninja:hover:not(.animating) {
+    animation: ninja-crouch 0.5s ease-in-out;
 }

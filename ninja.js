@@ -1,4 +1,4 @@
-// Ninja animation controller
+// Ninja animation controller - Chrome dino style
 (function() {
     const ninja = document.getElementById('ninja');
     let isAnimating = false;
@@ -9,54 +9,51 @@
         isAnimating = true;
         ninja.classList.add('animating');
 
-        // Jump animation
-        ninja.style.animation = 'ninja-jump 0.6s ease-in-out';
+        // Sequence 1: Crouch and jump
+        ninja.style.animation = 'ninja-crouch 0.3s ease-in-out';
 
         setTimeout(() => {
-            // Run forward
-            ninja.style.animation = 'ninja-jump 0.6s ease-in-out, ninja-run 2s linear';
-        }, 600);
+            // Big jump
+            ninja.style.animation = 'ninja-jump 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+        }, 300);
 
         setTimeout(() => {
-            // Flip animation
-            ninja.style.animation = 'ninja-flip 0.4s linear 2';
-        }, 1600);
+            // Run forward with leg movement
+            const ninjaEl = ninja.querySelector('::before') || ninja;
+            ninja.style.animation = 'ninja-run 1.8s linear, ninja-leg-run 0.2s steps(2) infinite';
+        }, 1000);
+
+        setTimeout(() => {
+            // First flip trick
+            ninja.style.animation = 'ninja-flip 0.5s ease-in-out';
+        }, 2800);
 
         setTimeout(() => {
             // Continue running
-            ninja.style.animation = 'ninja-run 1.5s linear';
-        }, 2400);
+            ninja.style.animation = 'none';
+            ninja.style.left = 'calc(50vw - 24px)';
+            setTimeout(() => {
+                ninja.style.animation = 'ninja-leg-run 0.2s steps(2) infinite';
+            }, 50);
+        }, 3300);
 
         setTimeout(() => {
-            // Backflip
-            ninja.style.animation = 'ninja-jump 0.5s ease-in-out, ninja-flip 0.5s linear, ninja-run 1.5s linear';
-        }, 3200);
+            // Epic backflip
+            ninja.style.animation = 'ninja-backflip 0.8s cubic-bezier(0.68, -0.55, 0.27, 1.55)';
+        }, 3800);
 
         setTimeout(() => {
-            // Sprint and exit
-            ninja.style.animation = 'ninja-exit 1s ease-in';
-        }, 4200);
+            // Final sprint off screen
+            ninja.style.animation = 'ninja-sprint 1.2s cubic-bezier(0.65, 0, 0.35, 1), ninja-leg-run 0.15s steps(2) infinite';
+        }, 4600);
 
         setTimeout(() => {
-            // Reset ninja position
+            // Reset ninja to starting position
             ninja.style.animation = '';
-            ninja.style.left = '40px';
+            ninja.style.left = '60px';
             ninja.style.opacity = '1';
             ninja.classList.remove('animating');
             isAnimating = false;
-        }, 5200);
-    });
-
-    // Add hover effect
-    ninja.addEventListener('mouseenter', function() {
-        if (!isAnimating) {
-            ninja.style.transform = 'scale(1.1)';
-        }
-    });
-
-    ninja.addEventListener('mouseleave', function() {
-        if (!isAnimating) {
-            ninja.style.transform = 'scale(1)';
-        }
+        }, 5800);
     });
 })();
