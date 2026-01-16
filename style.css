@@ -215,3 +215,86 @@ footer {
         margin-bottom: 20px;
     }
 }
+
+/* Ninja pixel art */
+.ninja {
+    position: fixed;
+    bottom: 20px;
+    left: 40px;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    z-index: 1000;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+/* Ninja sprite - standing pose */
+.ninja::before {
+    content: '';
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    background-image:
+        linear-gradient(90deg, transparent 8px, var(--ninja-color) 8px, var(--ninja-color) 24px, transparent 24px),
+        linear-gradient(90deg, transparent 10px, var(--ninja-color) 10px, var(--ninja-color) 22px, transparent 22px),
+        linear-gradient(90deg, transparent 12px, var(--ninja-color) 12px, var(--ninja-color) 20px, transparent 20px),
+        linear-gradient(90deg, transparent 6px, var(--ninja-color) 6px, var(--ninja-color) 26px, transparent 26px),
+        linear-gradient(90deg, transparent 8px, var(--ninja-color) 8px, var(--ninja-color) 24px, transparent 24px),
+        linear-gradient(90deg, transparent 10px, var(--ninja-color) 10px, var(--ninja-color) 22px, transparent 22px),
+        linear-gradient(90deg, transparent 10px, var(--ninja-color) 10px, var(--ninja-color) 14px, transparent 14px, transparent 18px, var(--ninja-color) 18px, var(--ninja-color) 22px, transparent 22px);
+    background-size: 32px 4px;
+    background-position: 0 4px, 0 8px, 0 12px, 0 16px, 0 20px, 0 24px, 0 28px;
+    background-repeat: no-repeat;
+}
+
+:root {
+    --ninja-color: #000000;
+}
+
+[data-theme="dark"] {
+    --ninja-color: #ffffff;
+}
+
+/* Ninja animations */
+@keyframes ninja-run {
+    0%, 100% {
+        transform: translateX(0) scaleX(1);
+    }
+    50% {
+        transform: translateX(50vw) scaleX(1);
+    }
+}
+
+@keyframes ninja-jump {
+    0%, 100% {
+        bottom: 20px;
+    }
+    50% {
+        bottom: 120px;
+    }
+}
+
+@keyframes ninja-flip {
+    0% {
+        transform: rotate(0deg) scaleX(1);
+    }
+    100% {
+        transform: rotate(360deg) scaleX(1);
+    }
+}
+
+@keyframes ninja-exit {
+    0% {
+        left: 50vw;
+        opacity: 1;
+    }
+    100% {
+        left: 100vw;
+        opacity: 0;
+    }
+}
+
+.ninja.animating {
+    pointer-events: none;
+}
