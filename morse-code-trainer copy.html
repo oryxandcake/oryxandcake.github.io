@@ -921,8 +921,8 @@
 
         // Multiplayer WebSocket functions
         function connectWebSocket() {
-            // Try to connect to local server first, fallback to demo mode
-            const wsUrl = 'ws://localhost:8080';
+            // Connect to cloud-hosted server
+            const wsUrl = 'wss://chris-2tqr.onrender.com';
 
             try {
                 ws = new WebSocket(wsUrl);
