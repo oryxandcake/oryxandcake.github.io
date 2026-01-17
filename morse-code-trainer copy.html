@@ -507,14 +507,13 @@
             'STARLIGHT', 'ODDBALL', 'CRAPGAME', 'ORANGE_LEADER', 'BLUE_SECTION'
         ];
 
-        // Get or create persistent user ID with unique session ID
+        // Get or create persistent user ID
         let userId = sessionStorage.getItem('morseUserId');
         if (!userId) {
             userId = callsigns[Math.floor(Math.random() * callsigns.length)];
-            // Add unique session ID to ensure no duplicates
-            userId += '_' + Date.now().toString(36).substr(-4);
             sessionStorage.setItem('morseUserId', userId);
         }
+        console.log('My callsign:', userId);
 
         let onlineUsers = new Map();
         let remoteOscillators = new Map();
@@ -989,16 +988,19 @@
         function handleServerMessage(data) {
             switch (data.type) {
                 case 'userList':
+                    console.log('Received user list:', data.users);
                     onlineUsers.clear();
                     data.users.forEach(user => {
                         if (user !== userId) {
                             onlineUsers.set(user, { transmitting: false });
+                            console.log('Added user to list:', user);
                         }
                     });
                     updateUserList();
                     break;
 
                 case 'userJoined':
+                    console.log('User joined:', data.userId);
                     if (data.userId !== userId) {
                         onlineUsers.set(data.userId, { transmitting: false });
                         updateUserList();
@@ -1011,17 +1013,22 @@
                     break;
 
                 case 'transmitStart':
+                    console.log('Received transmitStart from:', data.userId);
                     if (data.userId !== userId) {
                         const user = onlineUsers.get(data.userId);
                         if (user) {
                             user.transmitting = true;
                             updateUserList();
                             startRemoteTone(data.userId);
+                            console.log('Playing tone for:', data.userId);
+                        } else {
+                            console.log('User not in list:', data.userId, 'Available:', Array.from(onlineUsers.keys()));
                         }
                     }
                     break;
 
                 case 'transmitEnd':
+                    console.log('Received transmitEnd from:', data.userId);
                     if (data.userId !== userId) {
                         const user = onlineUsers.get(data.userId);
                         if (user) {
@@ -1115,15 +1122,19 @@
 
         function broadcastTransmitStart() {
             if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('Broadcasting transmitStart as:', userId);
                 ws.send(JSON.stringify({
                     type: 'transmitStart',
                     userId: userId
                 }));
+            } else {
+                console.log('WebSocket not open, cannot broadcast');
             }
         }
 
         function broadcastTransmitEnd() {
             if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('Broadcasting transmitEnd as:', userId);
                 ws.send(JSON.stringify({
                     type: 'transmitEnd',
                     userId: userId
