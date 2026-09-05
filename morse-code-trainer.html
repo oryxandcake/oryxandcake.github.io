@@ -63,6 +63,11 @@
         .visualizer-container {
             grid-column: 1;
             grid-row: 2;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            cursor: pointer;
             background: rgba(0, 255, 65, 0.02);
             border: 2px solid #00ff41;
             border-radius: 5px;
@@ -71,6 +76,11 @@
             overflow: hidden;
             box-shadow: 0 0 15px rgba(0, 255, 65, 0.2);
             height: 180px;
+        }
+
+        .visualizer-container.keying {
+            border-color: #00ffff;
+            box-shadow: 0 0 30px rgba(0, 255, 65, 0.6);
         }
 
         canvas {
@@ -316,13 +326,70 @@
             opacity: 0.8;
             margin-top: 10px;
         }
+
+        /* Narrow screens: stack into one column and scroll, instead of pushing
+           the 450px reference panel off the side of a clipped viewport */
+        @media (max-width: 820px) {
+            body {
+                overflow: auto;
+                height: auto;
+                min-height: 100vh;
+            }
+
+            .container {
+                grid-template-columns: 1fr;
+                grid-template-rows: none;
+                max-height: none;
+                overflow: visible;
+            }
+
+            .container > * {
+                grid-column: 1;
+                grid-row: auto;
+            }
+
+            .morse-reference {
+                order: 10;
+                overflow: visible;
+            }
+
+            .morse-grid {
+                grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+                overflow: visible;
+            }
+
+            h1 {
+                font-size: 1.1em;
+                letter-spacing: 3px;
+            }
+
+            .subtitle {
+                letter-spacing: 1px;
+            }
+
+            .playback-section {
+                flex-wrap: wrap;
+            }
+
+            .playback-input {
+                min-width: 100%;
+            }
+
+            .play-btn {
+                flex: 1;
+            }
+
+            .label {
+                min-width: 70px;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>MORSE CODE TRAINER</h1>
-            <div class="subtitle">Press SPACE to transmit</div>
+            <div class="subtitle">Press SPACE or hold the pad below to transmit</div>
         </div>
 
         <div class="visualizer-container">
@@ -433,6 +500,9 @@
                 gainNode = audioContext.createGain();
                 gainNode.connect(audioContext.destination);
                 gainNode.gain.value = 0;
+            }
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
             }
         }
 
@@ -654,79 +724,108 @@
             }
         }
 
+        // Keying is shared by the space bar and by touch/mouse on the pad
+        function startKey() {
+            if (isTransmitting) return;
+
+            // Clear any existing decode timer
+            if (decodeTimer) {
+                clearTimeout(decodeTimer);
+                decodeTimer = null;
+            }
+
+            const timeSinceRelease = Date.now() - lastReleaseTime;
+
+            // Check for word gap
+            if (timeSinceRelease > WORD_GAP) {
+                decodeMorse();
+                addSpace();
+            }
+            // Check for character gap
+            else if (timeSinceRelease > CHAR_GAP) {
+                decodeMorse();
+            }
+
+            isTransmitting = true;
+            pressStartTime = Date.now();
+            startTone();
+            statusEl.textContent = 'TRANSMITTING';
+            statusEl.classList.add('pulse');
+        }
+
+        function endKey() {
+            if (!isTransmitting) return;
+
+            isTransmitting = false;
+            stopTone();
+            statusEl.textContent = 'READY';
+            statusEl.classList.remove('pulse');
+
+            const duration = Date.now() - pressStartTime;
+            lastReleaseTime = Date.now();
+
+            // Determine if dot or dash
+            if (duration < DOT_THRESHOLD) {
+                currentMorse += '.';
+            } else {
+                currentMorse += '-';
+            }
+            updateDisplay();
+
+            // Clear any existing decode timer
+            if (decodeTimer) {
+                clearTimeout(decodeTimer);
+            }
+
+            // Set timer to automatically decode after character gap
+            decodeTimer = setTimeout(() => {
+                decodeMorse();
+                updateDisplay();
+            }, CHAR_GAP);
+        }
+
+        // Don't trigger morse input if typing in an input field
+        function typingInField() {
+            return document.activeElement.tagName === 'INPUT' ||
+                   document.activeElement.tagName === 'TEXTAREA';
+        }
+
         function handleKeyDown(e) {
             if (e.code === 'Space' && !e.repeat) {
-                // Don't trigger morse input if typing in an input field
-                if (document.activeElement.tagName === 'INPUT' ||
-                    document.activeElement.tagName === 'TEXTAREA') {
-                    return;
-                }
-
+                if (typingInField()) return;
                 e.preventDefault();
-
-                // Clear any existing decode timer
-                if (decodeTimer) {
-                    clearTimeout(decodeTimer);
-                    decodeTimer = null;
-                }
-
-                const timeSinceRelease = Date.now() - lastReleaseTime;
-
-                // Check for word gap
-                if (timeSinceRelease > WORD_GAP) {
-                    decodeMorse();
-                    addSpace();
-                }
-                // Check for character gap
-                else if (timeSinceRelease > CHAR_GAP) {
-                    decodeMorse();
-                }
-
-                isTransmitting = true;
-                pressStartTime = Date.now();
-                startTone();
-                statusEl.textContent = 'TRANSMITTING';
-                statusEl.classList.add('pulse');
+                startKey();
             }
         }
 
         function handleKeyUp(e) {
             if (e.code === 'Space') {
-                // Don't trigger morse input if typing in an input field
-                if (document.activeElement.tagName === 'INPUT' ||
-                    document.activeElement.tagName === 'TEXTAREA') {
-                    return;
-                }
-
+                if (typingInField()) return;
                 e.preventDefault();
-                isTransmitting = false;
-                stopTone();
-                statusEl.textContent = 'READY';
-                statusEl.classList.remove('pulse');
-
-                const duration = Date.now() - pressStartTime;
-                lastReleaseTime = Date.now();
-
-                // Determine if dot or dash
-                if (duration < DOT_THRESHOLD) {
-                    currentMorse += '.';
-                } else {
-                    currentMorse += '-';
-                }
-                updateDisplay();
-
-                // Clear any existing decode timer
-                if (decodeTimer) {
-                    clearTimeout(decodeTimer);
-                }
-
-                // Set timer to automatically decode after character gap
-                decodeTimer = setTimeout(() => {
-                    decodeMorse();
-                    updateDisplay();
-                }, CHAR_GAP);
+                endKey();
             }
         }
+
+        // Touch / mouse keying, so the trainer works without a keyboard
+        const keyPad = document.querySelector('.visualizer-container');
+
+        keyPad.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (playbackInput === document.activeElement) playbackInput.blur();
+            keyPad.classList.add('keying');
+            startKey();
+        });
+
+        function releasePad() {
+            if (!keyPad.classList.contains('keying')) return;
+            keyPad.classList.remove('keying');
+            endKey();
+        }
+
+        keyPad.addEventListener('pointerup', releasePad);
+        keyPad.addEventListener('pointercancel', releasePad);
+        keyPad.addEventListener('pointerleave', releasePad);
+        window.addEventListener('blur', releasePad);
 
         toggleBtn.addEventListener('click', () => {
             decoderEnabled = !decoderEnabled;
