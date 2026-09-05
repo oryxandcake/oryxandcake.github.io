@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Calendar, MapPin, Theater, Download, Check, Search, Filter, Star, ArrowLeft, ArrowRight, X, Heart, List, ChevronLeft, ChevronRight, CornerDownLeft, Delete } from 'lucide-react';
+// Loaded by theatre-swiper.html as a <script type="text/babel"> in the browser,
+// not bundled. React, its hooks, and the icon components are already defined as
+// globals by the host page, so this file must stay free of ES module syntax --
+// an `import` here throws "Cannot use import statement outside a module" and the
+// page renders blank.
 
 // Enhanced show data with descriptions, ratings, poster colors and poster URLs
 const shows = [
@@ -262,7 +265,7 @@ const shows = [
 const cities = ['All', ...new Set(shows.map(s => s.city))];
 const genres = ['All', ...new Set(shows.map(s => s.genre))];
 
-export default function TheatreSwiper() {
+function TheatreSwiper() {
   const [mode, setMode] = useState('browse'); // 'browse' or 'list'
   const [currentIndex, setCurrentIndex] = useState(0);
   const [shortlist, setShortlist] = useState(new Set());
