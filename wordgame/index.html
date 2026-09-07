@@ -58,7 +58,8 @@
     width:44px; height:44px; border-radius:14px; cursor:pointer; display:none; align-items:center; justify-content:center;
   }
   .btn-back.show{display:flex;}
-  .title{flex:1; color:#fff; font-size:19px; font-weight:bold; letter-spacing:.4px; text-align:center;}
+  .title{flex:1; min-width:0; color:#fff; font-size:17px; font-weight:bold; letter-spacing:.3px;
+         text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .stars-count{
     background:rgba(255,255,255,.16); color:#fff; border-radius:14px; padding:8px 12px;
     font-size:16px; font-weight:bold; white-space:nowrap; min-width:44px; text-align:center;
@@ -113,14 +114,16 @@
   .solved-row b{display:block; font-size:15px;}
   .solved-row span{font-size:13px; opacity:.95;}
   .g0{background:var(--plum)} .g1{background:var(--sea)} .g2{background:var(--coral)}
+  .g3{background:#a8642a}
   .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
   .tile{
     background:var(--card); border:none; border-radius:14px; min-height:74px; padding:6px 4px;
     font-family:inherit; font-size:clamp(12px,3.6vw,16px); font-weight:bold; color:var(--ink);
     cursor:pointer; box-shadow:0 4px 0 rgba(0,0,0,.2); word-break:break-word; line-height:1.15;
+    hyphens:auto;
   }
+  .tile.long{font-size:clamp(10px,3vw,13px);}
   .tile.sel{background:var(--sun); transform:translateY(3px); box-shadow:0 1px 0 rgba(0,0,0,.2);}
-  .tile.gone{visibility:hidden;}
   .shake{animation:shake .4s;}
   @keyframes shake{0%,100%{transform:translateX(0)} 20%{transform:translateX(-7px)} 40%{transform:translateX(7px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)}}
 
@@ -227,14 +230,14 @@
       </button>
     </div>
     <p class="booknote">
-      Words from <b>The Poisoned King</b> &#128009;, <b>Swallows and Amazons</b> &#9973;
-      and <b>Cakes in Space</b> &#128640;<br>Works with no internet. Play anywhere!
+      Words from <b>The Poisoned King</b> &#128009;, <b>Swallows and Amazons</b> &#9973;,
+      <b>Cakes in Space</b> &#128640; and <b>my toys</b> &#129528;<br>Works with no internet. Play anywhere!
     </p>
   </section>
 
   <!-- GROUPS -->
   <section class="screen" id="s-groups">
-    <div class="clue">Tap <b>3 words</b> that come from the same story.</div>
+    <div class="clue">Tap <b>3 words</b> that go together.</div>
     <div class="play">
       <div class="solved" id="g-solved"></div>
       <div class="grid" id="g-grid"></div>
@@ -295,7 +298,8 @@
 var BOOKS = {
   king:  { name:"The Poisoned King",   emoji:"🐉", cls:"g0" },
   swall: { name:"Swallows & Amazons",  emoji:"⛵",       cls:"g1" },
-  cakes: { name:"Cakes in Space",      emoji:"🚀", cls:"g2" }
+  cakes: { name:"Cakes in Space",      emoji:"🚀", cls:"g2" },
+  toys:  { name:"My Toys",             emoji:"🧸", cls:"g3" }
 };
 
 /* ---------- puzzle 1: sort the words ---------- */
@@ -307,7 +311,13 @@ var GROUP_SETS = [
   { king:["MERMAID","CENTAUR","PHOENIX"],swall:["COMPASS","LANTERN","CHART"],    cakes:["PLANET","HELMET","ENGINE"] },
   { king:["NEST","CHICK","SCALES"],     swall:["SWALLOW","AMAZON","ISLAND"],     cakes:["BISCUIT","SUGAR","TEETH"] },
   { king:["SWORD","LAIR","SPELL"],      swall:["TREASURE","SIGNAL","DUFFER"],    cakes:["SNORE","BUN","FROSTING"] },
-  { king:["BEAK","TAIL","HORN"],        swall:["NANCY","PEGGY","ROGER"],         cakes:["CUSTARD","WAFER","CANDLE"] }
+  { king:["BEAK","TAIL","HORN"],        swall:["NANCY","PEGGY","ROGER"],         cakes:["CUSTARD","WAFER","CANDLE"] },
+  { toys:["SLOTHY","ATTY","LOVE HEART"], king:["DRAGON","CASTLE","POISON"],     cakes:["ROCKET","ICING","SPOON"] },
+  { toys:["GREEN GUY","ORANGE VESTED GUY","BADINDINDOON"],
+                                        swall:["TENT","SAIL","PARROT"],         cakes:["CAKE","MOON","JELLY"] },
+  { toys:["GASSY","TEMPELIIN HENKII","SLOTHY"],
+                                        king:["SPHINX","UNICORN","KRAKEN"],     swall:["LAKE","OARS","FLAG"] },
+  { toys:["ATTY","LOVE HEART","GASSY"], swall:["COMPASS","ANCHOR","HARBOUR"],   cakes:["CUSTARD","BISCUIT","CHERRY"] }
 ];
 
 /* ---------- puzzle 2: guess the word ---------- */
@@ -340,7 +350,10 @@ var GUESS_WORDS = [
   { w:"MOON",   b:"cakes", c:"It glows in the night sky" },
   { w:"STAR",   b:"cakes", c:"A twinkly light far out in space" },
   { w:"SUGAR",  b:"cakes", c:"White and sweet, it goes in cakes" },
-  { w:"HELMET", b:"cakes", c:"You wear this on your head in space" }
+  { w:"HELMET", b:"cakes", c:"You wear this on your head in space" },
+  { w:"SLOTHY", b:"toys",  c:"Your sloth. His name says just what he is!" },
+  { w:"ATTY",   b:"toys",  c:"The pink sloth" },
+  { w:"GASSY",  b:"toys",  c:"The little orange penguin" }
 ];
 
 /* ---------- puzzle 3: mixed-up word ---------- */
@@ -370,7 +383,11 @@ var SCRAMBLE_WORDS = [
   { w:"JELLY",   b:"cakes", c:"Wobbly wobbly pudding" },
   { w:"MONSTER", b:"cakes", c:"Something scary with lots of teeth" },
   { w:"PLANET",  b:"cakes", c:"Earth is one of these" },
-  { w:"MOON",    b:"cakes", c:"It shines at night" }
+  { w:"MOON",    b:"cakes", c:"It shines at night" },
+  { w:"SLOTHY",  b:"toys",  c:"Your sloth" },
+  { w:"ATTY",    b:"toys",  c:"The pink sloth" },
+  { w:"GASSY",   b:"toys",  c:"The small orange penguin" },
+  { w:"BADINDINDOON", b:"toys", c:"A Lego friend with a very silly name" }
 ];
 
 var PRAISE = ["Brilliant!","Well done!","Yes!","Ace!","Super!","Nice one!","Clever you!","Hooray!"];
@@ -523,7 +540,7 @@ function newGroups(step){
   G.sel = [];
   G.found = 0;
   G.tiles = [];
-  ["king","swall","cakes"].forEach(function(k){
+  Object.keys(G.set).forEach(function(k){
     G.set[k].forEach(function(w){ G.tiles.push({ word:w, book:k }); });
   });
   G.tiles = shuffle(G.tiles);
@@ -536,8 +553,10 @@ function drawGroups(){
   var grid = $("g-grid");
   grid.innerHTML = "";
   G.tiles.forEach(function(t, i){
+    if(t.done) return;
     var b = document.createElement("button");
-    b.className = "tile" + (G.sel.indexOf(i) > -1 ? " sel" : "") + (t.done ? " gone" : "");
+    b.className = "tile" + (t.word.length > 9 ? " long" : "") +
+                  (G.sel.indexOf(i) > -1 ? " sel" : "");
     b.textContent = t.word;
     b.onclick = function(){ tapTile(i); };
     grid.appendChild(b);
@@ -555,6 +574,8 @@ function tapTile(i){
 }
 
 function checkGroup(){
+  /* the puzzle can be restarted between tapping the third tile and this check */
+  if(G.sel.length !== 3) return;
   var books = G.sel.map(function(i){ return G.tiles[i].book; });
   var same = books[0] === books[1] && books[1] === books[2];
 
@@ -576,15 +597,17 @@ function checkGroup(){
       addStars(3);
       markDone("groups");
       setTimeout(function(){
-        celebrate("All sorted!", "You found all three stories. +3 stars", "🧩",
+        celebrate("All sorted!", "You found all three groups. +3 stars", "🧩",
                   function(){ newGroups(1); });
       }, 500);
     }
   } else {
     /* how many share a book? two matching is worth a friendly nudge */
-    var counts = {};
-    books.forEach(function(b){ counts[b] = (counts[b]||0) + 1; });
-    var best = Math.max(counts.king||0, counts.swall||0, counts.cakes||0);
+    var counts = {}, best = 0;
+    books.forEach(function(b){
+      counts[b] = (counts[b]||0) + 1;
+      if(counts[b] > best){ best = counts[b]; }
+    });
     $("g-say").textContent = best === 2 ? "So close - two of those match!" : pick(TRY_AGAIN);
     $("g-say").className = "say pop";
     sndBad(); buzz(80);
