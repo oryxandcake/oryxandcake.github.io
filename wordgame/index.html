@@ -81,7 +81,8 @@
   .mode .emoji{font-size:34px; line-height:1;}
   .mode b{display:block; font-size:19px;}
   .mode span{font-size:13px; opacity:.7;}
-  .mode .tick{margin-left:auto; font-size:22px;}
+  .mode .tick{margin-left:auto; font-size:22px; text-align:center; flex:none;}
+  .mode .tick .left{font-size:11px; font-weight:bold; opacity:.55; line-height:1.2; display:block;}
   .booknote{margin-top:16px; color:#fff; opacity:.8; font-size:12.5px; text-align:center; line-height:1.6;}
   .all-done{
     margin:16px 0 0; padding:14px; border-radius:var(--r); text-align:center; color:#fff;
@@ -217,7 +218,7 @@
   <section class="screen on" id="s-home">
     <div class="hero">
       <h1><span class="names">Magnus and Felix</span>Words Quest</h1>
-      <p>Three little puzzles. A new one every time!</p>
+      <p>Three of each puzzle every day</p>
     </div>
     <div class="menu">
       <button class="mode" data-go="groups">
@@ -237,7 +238,7 @@
       </button>
     </div>
     <p class="all-done" id="all-done" hidden>
-      &#127942; <b>Congratulations!</b><br>You have finished every single puzzle.
+      &#127769; <b>All done for today!</b><br>Come back tomorrow for three more of each.
     </p>
     <p class="booknote">
       Words from <b>The Poisoned King</b> &#128009;, <b>Swallows and Amazons</b> &#9973;,
@@ -458,43 +459,82 @@ var save = {
 var state = save.read();
 if(typeof state.sound !== "boolean"){ state.sound = true; }
 if(!state.progress){ state.progress = {}; }
-["groups","guess","scramble"].forEach(function(m){
+if(!state.today){ state.today = {}; }
+
+/* How many puzzles of each kind may be played per day.
+   Change this one number to make the daily go longer or shorter. */
+var DAILY_LIMIT = 3;
+
+var MODES = ["groups","guess","scramble"];
+MODES.forEach(function(m){
   if(!Array.isArray(state.progress[m])){ state.progress[m] = []; }
+  if(typeof state.today[m] !== "number"){ state.today[m] = 0; }
 });
 
-/* how many puzzles each game has, so we know when it has all been played */
 function poolSize(mode){
   if(mode === "groups"){ return GROUP_SETS.length; }
   if(mode === "guess"){ return GUESS_WORDS.length; }
   return SCRAMBLE_WORDS.length;
 }
 
-/* a puzzle nobody has finished yet, picked at random so it differs every time */
-function pickPuzzle(mode){
+/* today's date, so the allowance refills overnight */
+function todayKey(){
+  var d = new Date();
+  return d.getFullYear() + "-" + (d.getMonth()+1) + "-" + d.getDate();
+}
+function newDayIfNeeded(){
+  if(state.day !== todayKey()){
+    state.day = todayKey();
+    state.today = { groups:0, guess:0, scramble:0 };
+    save.write(state);
+  }
+}
+function playsLeftToday(mode){
+  newDayIfNeeded();
+  return Math.max(0, DAILY_LIMIT - (state.today[mode] || 0));
+}
+function doneForToday(){
+  return MODES.every(function(m){ return playsLeftToday(m) === 0; });
+}
+
+/* Take one puzzle off today's allowance and hand back a puzzle to play.
+   Returns -1 when this game has had its turns for today. */
+function startPuzzle(mode){
+  if(playsLeftToday(mode) === 0){ return -1; }
+  state.today[mode] = (state.today[mode] || 0) + 1;
+  save.write(state);
+  paintTicks();
+
+  /* prefer one they have not finished before; once the whole set has been
+     played through, start the set again so the game never runs dry */
   var done = state.progress[mode], left = [], i;
   for(i = 0; i < poolSize(mode); i++){
     if(done.indexOf(i) < 0){ left.push(i); }
   }
-  return left.length ? left[Math.floor(Math.random()*left.length)] : -1;
-}
-function puzzlesLeft(mode){ return poolSize(mode) - state.progress[mode].length; }
-function allFinished(){
-  return puzzlesLeft("groups") === 0 && puzzlesLeft("guess") === 0 && puzzlesLeft("scramble") === 0;
+  if(!left.length){
+    state.progress[mode] = [];
+    save.write(state);
+    for(i = 0; i < poolSize(mode); i++){ left.push(i); }
+  }
+  return left[Math.floor(Math.random()*left.length)];
 }
 
+/* remembering which ones are finished keeps the puzzles feeling fresh;
+   one they could not get is left out, so it can come round again */
 function markPuzzleDone(mode, idx){
   if(state.progress[mode].indexOf(idx) < 0){
     state.progress[mode].push(idx);
     save.write(state);
-    paintTicks();
   }
 }
 
 function paintTicks(){
-  ["groups","guess","scramble"].forEach(function(m){
-    $("tick-"+m).innerHTML = puzzlesLeft(m) === 0 ? "🏆" : "";
+  MODES.forEach(function(m){
+    var n = playsLeftToday(m);
+    $("tick-"+m).innerHTML = n === 0 ? "🌙"
+      : "<span class='left'>" + n + " left<br>today</span>";
   });
-  $("all-done").hidden = !allFinished();
+  $("all-done").hidden = !doneForToday();
 }
 
 /* ---------- sounds, made with the browser (no files needed) ---------- */
@@ -556,7 +596,7 @@ document.querySelectorAll(".mode").forEach(function(b){
   b.onclick = function(){
     sndTap();
     var m = b.getAttribute("data-go");
-    if(puzzlesLeft(m) === 0){ celebrateFinished(m); return; }
+    if(playsLeftToday(m) === 0){ celebrateDayOver(m); return; }
     show(m);
     if(m === "groups"){ newGroups(); }
     if(m === "guess"){ newGuess(); }
@@ -578,10 +618,16 @@ function celebrate(title, text, emoji, again){
 
 /* every puzzle in this game has now been finished */
 var GAME_NAMES = { groups:"Sort the Words", guess:"Guess the Word", scramble:"Mixed-Up Word" };
-function celebrateFinished(mode){
-  celebrate("Congratulations!",
-            "You have finished every " + GAME_NAMES[mode] + " puzzle. There are no more!",
-            allFinished() ? "🏆" : "🎖️", null);
+function celebrateDayOver(mode){
+  var more = MODES.filter(function(m){ return playsLeftToday(m) > 0; });
+  var text = "You have played your " + DAILY_LIMIT + " " + GAME_NAMES[mode] +
+             " puzzles for today.";
+  if(more.length){
+    text += " Try " + GAME_NAMES[more[0]] + " instead!";
+  } else {
+    text += " That is everything for today \u2014 see you tomorrow!";
+  }
+  celebrate(more.length ? "All done here!" : "All done for today!", text, "🌙", null);
 }
 $("win-home").onclick = function(){ sndTap(); show("home"); };
 $("win-again").onclick = function(){ sndTap(); $("win").classList.remove("on"); againFn(); };
@@ -592,8 +638,8 @@ $("win-again").onclick = function(){ sndTap(); $("win").classList.remove("on"); 
 var G = { set:null, idx:-1, tiles:[], sel:[], found:0 };
 
 function newGroups(){
-  var idx = pickPuzzle("groups");
-  if(idx < 0){ celebrateFinished("groups"); return; }
+  var idx = startPuzzle("groups");
+  if(idx < 0){ celebrateDayOver("groups"); return; }
   G.idx = idx;
   G.set = GROUP_SETS[idx];
   G.sel = [];
@@ -655,7 +701,7 @@ function checkGroup(){
     if(G.found === 3){
       markPuzzleDone("groups", G.idx);
       setTimeout(function(){
-        if(puzzlesLeft("groups") === 0){ celebrateFinished("groups"); return; }
+        if(playsLeftToday("groups") === 0){ celebrateDayOver("groups"); return; }
         celebrate("All sorted!", "You found all three groups!", "🧩", newGroups);
       }, 500);
     }
@@ -694,8 +740,8 @@ var W = { word:"", clue:"", book:"", idx:-1, row:0, guess:"", over:false, keys:{
 var KB_ROWS = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
 
 function newGuess(){
-  var idx = pickPuzzle("guess");
-  if(idx < 0){ celebrateFinished("guess"); return; }
+  var idx = startPuzzle("guess");
+  if(idx < 0){ celebrateDayOver("guess"); return; }
   W.idx = idx;
   var item = GUESS_WORDS[idx];
   W.word = item.w;
@@ -861,7 +907,7 @@ function submitGuess(){
     W.over = true;
     setTimeout(function(){
       markPuzzleDone("guess", W.idx);
-      if(puzzlesLeft("guess") === 0){ celebrateFinished("guess"); return; }
+      if(playsLeftToday("guess") === 0){ celebrateDayOver("guess"); return; }
       celebrate("You got it!", guessed + " in " + W.row + (W.row === 1 ? " try" : " tries") + "!",
                 "🔍", newGuess);
     }, delay);
@@ -877,8 +923,13 @@ function submitGuess(){
       $("w-say").className = "say pop";
       sndBad();
       setTimeout(function(){
-        celebrate("Good try!", "The word was " + W.word + ". Shall we try another?",
-                  "🤗", newGuess);
+        if(playsLeftToday("guess") === 0){
+          celebrate("Good try!", "The word was " + W.word +
+                    ". That is your last one for today \u2014 see you tomorrow!", "🌙", null);
+        } else {
+          celebrate("Good try!", "The word was " + W.word + ". Shall we try another?",
+                    "🤗", newGuess);
+        }
       }, 900);
     } else {
       /* a gentle helping hand after three goes */
@@ -907,8 +958,8 @@ document.addEventListener("keydown", function(e){
 var X = { word:"", clue:"", book:"", idx:-1, letters:[], slots:[], hints:0, clueShown:false };
 
 function newScramble(){
-  var idx = pickPuzzle("scramble");
-  if(idx < 0){ celebrateFinished("scramble"); return; }
+  var idx = startPuzzle("scramble");
+  if(idx < 0){ celebrateDayOver("scramble"); return; }
   X.idx = idx;
   var item = SCRAMBLE_WORDS[idx];
   X.word = item.w;
@@ -1000,7 +1051,7 @@ function checkScramble(){
     X.slots.forEach(function(s){ s.locked = true; });
     drawScramble();
     setTimeout(function(){
-      if(puzzlesLeft("scramble") === 0){ celebrateFinished("scramble"); return; }
+      if(playsLeftToday("scramble") === 0){ celebrateDayOver("scramble"); return; }
       celebrate("Unscrambled!", X.word, "🎭", newScramble);
     }, 400);
   } else {
