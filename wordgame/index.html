@@ -83,6 +83,12 @@
   .mode span{font-size:13px; opacity:.7;}
   .mode .tick{margin-left:auto; font-size:22px;}
   .booknote{margin-top:16px; color:#fff; opacity:.8; font-size:12.5px; text-align:center; line-height:1.6;}
+  .all-done{
+    margin:16px 0 0; padding:14px; border-radius:var(--r); text-align:center; color:#fff;
+    background:linear-gradient(135deg, #9b5de5, #2f9ec4); font-size:15px; line-height:1.5;
+    box-shadow:0 4px 0 rgba(0,0,0,.2);
+  }
+  .all-done b{font-size:18px;}
 
   /* ---------- shared game bits ---------- */
   .clue{
@@ -116,7 +122,7 @@
   .solved-row b{display:block; font-size:15px;}
   .solved-row span{font-size:13px; opacity:.95;}
   .g0{background:var(--plum)} .g1{background:var(--sea)} .g2{background:var(--coral)}
-  .g3{background:#a8642a}
+  .g3{background:#a8642a} .g4{background:#1f7a8c}
   .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
   .tile{
     background:var(--card); border:none; border-radius:14px; min-height:74px; padding:6px 4px;
@@ -211,7 +217,7 @@
   <section class="screen on" id="s-home">
     <div class="hero">
       <h1><span class="names">Magnus and Felix</span>Words Quest</h1>
-      <p>Three little puzzles every day</p>
+      <p>Three little puzzles. A new one every time!</p>
     </div>
     <div class="menu">
       <button class="mode" data-go="groups">
@@ -230,9 +236,12 @@
         <span class="tick" id="tick-scramble"></span>
       </button>
     </div>
+    <p class="all-done" id="all-done" hidden>
+      &#127942; <b>Congratulations!</b><br>You have finished every single puzzle.
+    </p>
     <p class="booknote">
       Words from <b>The Poisoned King</b> &#128009;, <b>Swallows and Amazons</b> &#9973;,
-      <b>Cakes in Space</b> &#128640; and <b>our toys</b> &#129528;<br>Works with no internet. Play anywhere!
+      <b>Cakes in Space</b> &#128640;, <b>our toys</b> &#129528; and <b>our family</b> &#128106;<br>Works with no internet. Play anywhere!
     </p>
   </section>
 
@@ -300,7 +309,8 @@ var BOOKS = {
   king:  { name:"The Poisoned King",   emoji:"🐉", cls:"g0" },
   swall: { name:"Swallows & Amazons",  emoji:"⛵",       cls:"g1" },
   cakes: { name:"Cakes in Space",      emoji:"🚀", cls:"g2" },
-  toys:  { name:"Our Toys",            emoji:"🧸", cls:"g3" }
+  toys:  { name:"Our Toys",            emoji:"🧸", cls:"g3" },
+  fam:   { name:"Our Family",          emoji:"👪", cls:"g4" }
 };
 
 /* ---------- puzzle 1: sort the words ---------- */
@@ -318,7 +328,13 @@ var GROUP_SETS = [
                                         swall:["TENT","SAIL","PARROT"],         cakes:["CAKE","MOON","JELLY"] },
   { toys:["GASSY","TEMPELIIN HENKII","SLOTHY"],
                                         king:["SPHINX","UNICORN","KRAKEN"],     swall:["LAKE","OARS","FLAG"] },
-  { toys:["ATTY","LOVE HEART","GASSY"], swall:["COMPASS","ANCHOR","HARBOUR"],   cakes:["CUSTARD","BISCUIT","CHERRY"] }
+  { toys:["ATTY","LOVE HEART","GASSY"], swall:["COMPASS","ANCHOR","HARBOUR"],   cakes:["CUSTARD","BISCUIT","CHERRY"] },
+  { fam:["MAGNUS","FELIX","NINA"],      king:["GRIFFIN","DRAGON","CASTLE"],     cakes:["CAKE","ROCKET","SPOON"] },
+  { fam:["MAMA","PAPA","GRANDMA"],      swall:["BOAT","TENT","LAKE"],           toys:["SLOTHY","ATTY","GASSY"] },
+  { fam:["TATA HELEN","TATA OLIVIA","TATA ALICIA"],
+                                        king:["UNICORN","KRAKEN","POISON"],     cakes:["ICING","JELLY","BISCUIT"] },
+  { fam:["MOMI","MOMELI","MOFA"],       toys:["GREEN GUY","BADINDINDOON","LOVE HEART"],
+                                                                                swall:["PARROT","SAIL","COMPASS"] }
 ];
 
 /* ---------- puzzle 2: guess the word ---------- */
@@ -354,7 +370,17 @@ var GUESS_WORDS = [
   { w:"HELMET", b:"cakes", c:"You wear this on your head in space" },
   { w:"SLOTHY", b:"toys",  c:"Your sloth. His name says just what he is!" },
   { w:"ATTY",   b:"toys",  c:"The pink sloth" },
-  { w:"GASSY",  b:"toys",  c:"The little orange penguin" }
+  { w:"GASSY",  b:"toys",  c:"The little orange penguin" },
+  { w:"MAGNUS",  b:"fam", c:"Your family" },
+  { w:"FELIX",   b:"fam", c:"Your family" },
+  { w:"NINA",    b:"fam", c:"Your family" },
+  { w:"MAMA",    b:"fam", c:"Your family" },
+  { w:"PAPA",    b:"fam", c:"Your family" },
+  { w:"MOMI",    b:"fam", c:"Your family" },
+  { w:"GRANDMA", b:"fam", c:"Your family" },
+  { w:"GRANDPA", b:"fam", c:"Your family" },
+  { w:"MOMELI",  b:"fam", c:"Your family" },
+  { w:"MOFA",    b:"fam", c:"Your family" }
 ];
 
 /* ---------- puzzle 3: mixed-up word ---------- */
@@ -388,7 +414,17 @@ var SCRAMBLE_WORDS = [
   { w:"SLOTHY",  b:"toys",  c:"Your sloth" },
   { w:"ATTY",    b:"toys",  c:"The pink sloth" },
   { w:"GASSY",   b:"toys",  c:"The small orange penguin" },
-  { w:"BADINDINDOON", b:"toys", c:"A Lego friend with a very silly name" }
+  { w:"BADINDINDOON", b:"toys", c:"A Lego friend with a very silly name" },
+  { w:"MAGNUS",  b:"fam", c:"Your family" },
+  { w:"FELIX",   b:"fam", c:"Your family" },
+  { w:"NINA",    b:"fam", c:"Your family" },
+  { w:"MAMA",    b:"fam", c:"Your family" },
+  { w:"PAPA",    b:"fam", c:"Your family" },
+  { w:"MOMI",    b:"fam", c:"Your family" },
+  { w:"GRANDMA", b:"fam", c:"Your family" },
+  { w:"GRANDPA", b:"fam", c:"Your family" },
+  { w:"MOMELI",  b:"fam", c:"Your family" },
+  { w:"MOFA",    b:"fam", c:"Your family" }
 ];
 
 var PRAISE = ["Brilliant!","Well done!","Yes!","Ace!","Super!","Nice one!","Clever you!","Hooray!"];
@@ -409,16 +445,6 @@ function shuffle(a){
   return a;
 }
 
-/* today's number, so everyone gets the same puzzles on the same day */
-function dayNumber(){
-  var d = new Date();
-  return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())/86400000);
-}
-function todayKey(){
-  var d = new Date();
-  return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();
-}
-
 /* saved progress - wrapped up so a locked-down browser can't break the game */
 var save = {
   read: function(){
@@ -430,17 +456,45 @@ var save = {
   }
 };
 var state = save.read();
-if(state.day !== todayKey()){ state.day = todayKey(); state.done = {}; }
-if(!state.done){ state.done = {}; }
 if(typeof state.sound !== "boolean"){ state.sound = true; }
+if(!state.progress){ state.progress = {}; }
+["groups","guess","scramble"].forEach(function(m){
+  if(!Array.isArray(state.progress[m])){ state.progress[m] = []; }
+});
+
+/* how many puzzles each game has, so we know when it has all been played */
+function poolSize(mode){
+  if(mode === "groups"){ return GROUP_SETS.length; }
+  if(mode === "guess"){ return GUESS_WORDS.length; }
+  return SCRAMBLE_WORDS.length;
+}
+
+/* a puzzle nobody has finished yet, picked at random so it differs every time */
+function pickPuzzle(mode){
+  var done = state.progress[mode], left = [], i;
+  for(i = 0; i < poolSize(mode); i++){
+    if(done.indexOf(i) < 0){ left.push(i); }
+  }
+  return left.length ? left[Math.floor(Math.random()*left.length)] : -1;
+}
+function puzzlesLeft(mode){ return poolSize(mode) - state.progress[mode].length; }
+function allFinished(){
+  return puzzlesLeft("groups") === 0 && puzzlesLeft("guess") === 0 && puzzlesLeft("scramble") === 0;
+}
+
+function markPuzzleDone(mode, idx){
+  if(state.progress[mode].indexOf(idx) < 0){
+    state.progress[mode].push(idx);
+    save.write(state);
+    paintTicks();
+  }
+}
 
 function paintTicks(){
   ["groups","guess","scramble"].forEach(function(m){
-    $("tick-"+m).innerHTML = state.done[m] ? "✅" : "";
+    $("tick-"+m).innerHTML = puzzlesLeft(m) === 0 ? "🏆" : "";
   });
-}
-function markDone(mode){
-  if(!state.done[mode]){ state.done[mode] = true; save.write(state); paintTicks(); }
+  $("all-done").hidden = !allFinished();
 }
 
 /* ---------- sounds, made with the browser (no files needed) ---------- */
@@ -502,22 +556,32 @@ document.querySelectorAll(".mode").forEach(function(b){
   b.onclick = function(){
     sndTap();
     var m = b.getAttribute("data-go");
-    if(m === "groups"){ newGroups(0); }
-    if(m === "guess"){ newGuess(0); }
-    if(m === "scramble"){ newScramble(0); }
+    if(puzzlesLeft(m) === 0){ celebrateFinished(m); return; }
     show(m);
+    if(m === "groups"){ newGroups(); }
+    if(m === "guess"){ newGuess(); }
+    if(m === "scramble"){ newScramble(); }
   };
 });
 
 /* ---------- win popup ---------- */
 var againFn = function(){};
 function celebrate(title, text, emoji, again){
-  againFn = again;
+  againFn = again || null;
   $("win-emoji").innerHTML = emoji;
   $("win-title").textContent = title;
   $("win-text").textContent = text;
+  $("win-again").hidden = !againFn;          /* nothing left to play */
   $("win").classList.add("on");
   cheer(); sndWin(); buzz([40,60,40]);
+}
+
+/* every puzzle in this game has now been finished */
+var GAME_NAMES = { groups:"Sort the Words", guess:"Guess the Word", scramble:"Mixed-Up Word" };
+function celebrateFinished(mode){
+  celebrate("Congratulations!",
+            "You have finished every " + GAME_NAMES[mode] + " puzzle. There are no more!",
+            allFinished() ? "🏆" : "🎖️", null);
 }
 $("win-home").onclick = function(){ sndTap(); show("home"); };
 $("win-again").onclick = function(){ sndTap(); $("win").classList.remove("on"); againFn(); };
@@ -525,11 +589,12 @@ $("win-again").onclick = function(){ sndTap(); $("win").classList.remove("on"); 
 /* ============================================================
    GAME 1 - Sort the Words
    ============================================================ */
-var G = { set:null, tiles:[], sel:[], found:0, offset:0 };
+var G = { set:null, idx:-1, tiles:[], sel:[], found:0 };
 
-function newGroups(step){
-  G.offset = (typeof step === "number" && step > 0) ? G.offset + step : 0;
-  var idx = (dayNumber() + G.offset) % GROUP_SETS.length;
+function newGroups(){
+  var idx = pickPuzzle("groups");
+  if(idx < 0){ celebrateFinished("groups"); return; }
+  G.idx = idx;
   G.set = GROUP_SETS[idx];
   G.sel = [];
   G.found = 0;
@@ -588,10 +653,10 @@ function checkGroup(){
     drawGroups();
 
     if(G.found === 3){
-      markDone("groups");
+      markPuzzleDone("groups", G.idx);
       setTimeout(function(){
-        celebrate("All sorted!", "You found all three groups!", "🧩",
-                  function(){ newGroups(1); });
+        if(puzzlesLeft("groups") === 0){ celebrateFinished("groups"); return; }
+        celebrate("All sorted!", "You found all three groups!", "🧩", newGroups);
       }, 500);
     }
   } else {
@@ -620,17 +685,18 @@ $("g-shuffle").onclick = function(){
   G.sel = [];
   drawGroups();
 };
-$("g-next").onclick = function(){ sndTap(); newGroups(1); };
+$("g-next").onclick = function(){ sndTap(); newGroups(); };
 
 /* ============================================================
    GAME 2 - Guess the Word
    ============================================================ */
-var W = { word:"", clue:"", book:"", row:0, guess:"", over:false, offset:0, keys:{} };
+var W = { word:"", clue:"", book:"", idx:-1, row:0, guess:"", over:false, keys:{} };
 var KB_ROWS = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
 
-function newGuess(step){
-  W.offset = (typeof step === "number" && step > 0) ? W.offset + step : 0;
-  var idx = (dayNumber()*3 + W.offset) % GUESS_WORDS.length;
+function newGuess(){
+  var idx = pickPuzzle("guess");
+  if(idx < 0){ celebrateFinished("guess"); return; }
+  W.idx = idx;
   var item = GUESS_WORDS[idx];
   W.word = item.w;
   W.clue = item.c;
@@ -794,9 +860,10 @@ function submitGuess(){
   if(won){
     W.over = true;
     setTimeout(function(){
-      markDone("guess");
+      markPuzzleDone("guess", W.idx);
+      if(puzzlesLeft("guess") === 0){ celebrateFinished("guess"); return; }
       celebrate("You got it!", guessed + " in " + W.row + (W.row === 1 ? " try" : " tries") + "!",
-                "🔍", function(){ newGuess(1); });
+                "🔍", newGuess);
     }, delay);
     return;
   }
@@ -811,7 +878,7 @@ function submitGuess(){
       sndBad();
       setTimeout(function(){
         celebrate("Good try!", "The word was " + W.word + ". Shall we try another?",
-                  "🤗", function(){ newGuess(1); });
+                  "🤗", newGuess);
       }, 900);
     } else {
       /* a gentle helping hand after three goes */
@@ -837,11 +904,12 @@ document.addEventListener("keydown", function(e){
 /* ============================================================
    GAME 3 - Mixed-Up Word
    ============================================================ */
-var X = { word:"", clue:"", book:"", letters:[], slots:[], offset:0, hints:0, clueShown:false };
+var X = { word:"", clue:"", book:"", idx:-1, letters:[], slots:[], hints:0, clueShown:false };
 
-function newScramble(step){
-  X.offset = (typeof step === "number" && step > 0) ? X.offset + step : 0;
-  var idx = (dayNumber()*5 + X.offset) % SCRAMBLE_WORDS.length;
+function newScramble(){
+  var idx = pickPuzzle("scramble");
+  if(idx < 0){ celebrateFinished("scramble"); return; }
+  X.idx = idx;
   var item = SCRAMBLE_WORDS[idx];
   X.word = item.w;
   X.hints = 0;
@@ -928,11 +996,12 @@ function takeBack(i){
 function checkScramble(){
   var made = X.slots.map(function(s){ return s.ch; }).join("");
   if(made === X.word){
-    markDone("scramble");
+    markPuzzleDone("scramble", X.idx);
     X.slots.forEach(function(s){ s.locked = true; });
     drawScramble();
     setTimeout(function(){
-      celebrate("Unscrambled!", X.word, "🎭", function(){ newScramble(1); });
+      if(puzzlesLeft("scramble") === 0){ celebrateFinished("scramble"); return; }
+      celebrate("Unscrambled!", X.word, "🎭", newScramble);
     }, 400);
   } else {
     $("x-say").textContent = pick(TRY_AGAIN);
@@ -975,7 +1044,7 @@ $("x-hint").onclick = function(){
   drawScramble();
   if(X.slots.every(function(s){ return s; })){ setTimeout(checkScramble, 300); }
 };
-$("x-next").onclick = function(){ sndTap(); newScramble(1); };
+$("x-next").onclick = function(){ sndTap(); newScramble(); };
 
 /* ============================================================
    sound on / off
