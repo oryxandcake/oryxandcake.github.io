@@ -1130,7 +1130,18 @@ show("home");
 /* remember the game so it works with no internet */
 if("serviceWorker" in navigator){
   window.addEventListener("load", function(){
-    navigator.serviceWorker.register("sw.js").catch(function(){});
+    /* updateViaCache:none so the browser cannot serve a stale copy of sw.js */
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).catch(function(){});
+  });
+
+  /* when a newer version takes over, refresh once so the new words show up */
+  navigator.serviceWorker.addEventListener("message", function(e){
+    if(!e.data || e.data.type !== "new-version"){ return; }
+    try{
+      if(sessionStorage.getItem("wq-refreshed")){ return; }
+      sessionStorage.setItem("wq-refreshed", "1");
+    }catch(err){}
+    location.reload();
   });
 }
 </script>
