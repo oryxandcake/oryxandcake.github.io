@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#152a3a">
+<meta name="description" content="Word Snakes: a winding word puzzle built from the books Magnus and Felix read.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Word Snakes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<title>Word Snakes</title>
+<style>
+  :root{
+    --ink:#12203c;
+    --board:#f3f7fd;
+    --tile:#ffffff;
+    --gold:#f2b705;
+    --accent:#4aa3df;
+    --bonus:#59c27a;
+    --r:18px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%; margin:0;}
+  body{
+    font-family:"Trebuchet MS", Verdana, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color:#fff;
+    background:
+      radial-gradient(circle at 12% 6%, #2d5f8a 0%, transparent 46%),
+      radial-gradient(circle at 88% 10%, #7a4b9e 0%, transparent 42%),
+      linear-gradient(180deg, #152a3a 0%, #1e3c56 55%, #2a5f6e 100%);
+    background-attachment:fixed;
+    user-select:none; -webkit-user-select:none;
+    overflow-x:hidden;
+  }
+  .app{max-width:520px; margin:0 auto; min-height:100%; display:flex; flex-direction:column;
+       padding:8px 12px calc(10px + env(safe-area-inset-bottom,0px));}
+
+  header{display:flex; align-items:center; gap:8px; min-height:42px;}
+  .iconbtn{border:none; background:rgba(255,255,255,.15); color:#fff; width:42px; height:42px;
+           border-radius:13px; font-size:18px; cursor:pointer; display:none; align-items:center; justify-content:center;}
+  .iconbtn.show{display:flex;}
+  .htitle{flex:1; min-width:0; text-align:center; font-size:16px; font-weight:bold;
+          white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+  .screen{display:none; flex:1; flex-direction:column;}
+  .screen.on{display:flex;}
+
+  /* ---------------- menu ---------------- */
+  .hero{text-align:center; padding:10px 0 14px;}
+  .hero h1{margin:0; font-size:clamp(30px,10vw,44px); letter-spacing:1px; text-shadow:0 3px 0 rgba(0,0,0,.25);}
+  .hero p{margin:6px 0 0; font-size:14px; opacity:.85;}
+  .plist{display:flex; flex-direction:column; gap:10px;}
+  .pcard{display:flex; align-items:center; gap:12px; width:100%; text-align:left; border:none;
+         border-radius:var(--r); padding:14px; background:#fff; color:var(--ink);
+         box-shadow:0 5px 0 rgba(0,0,0,.22); font-family:inherit; cursor:pointer;}
+  .pcard:active{transform:translateY(3px); box-shadow:0 2px 0 rgba(0,0,0,.22);}
+  .pcard .num{width:34px; height:34px; border-radius:50%; background:var(--accent); color:#fff;
+              display:flex; align-items:center; justify-content:center; font-weight:bold; flex:none;}
+  .pcard b{display:block; font-size:17px;}
+  .pcard span{font-size:12.5px; opacity:.7;}
+  .pcard .state{margin-left:auto; font-size:20px;}
+  .note{margin-top:14px; font-size:12.5px; opacity:.8; text-align:center; line-height:1.6;}
+
+  /* ---------------- play ---------------- */
+  .clue{background:rgba(255,255,255,.14); border-radius:var(--r); padding:10px 12px; text-align:center;
+        margin-bottom:8px;}
+  .clue b{display:block; font-size:17px;}
+  .clue span{font-size:12.5px; opacity:.8;}
+
+  .boardwrap{display:flex; justify-content:center;}
+  .board{
+    --gap:5px;
+    --cell:min( calc((100vw - 40px - 5*var(--gap)) / 6),
+                calc((100vh - 280px - 7*var(--gap)) / 8), 62px );
+    position:relative;
+    display:grid;
+    grid-template-columns:repeat(6, var(--cell));
+    grid-auto-rows:var(--cell);
+    gap:var(--gap);
+    padding:6px;
+    border-radius:20px;
+    background:var(--board);
+    touch-action:none;
+  }
+  #lines{position:absolute; inset:6px; z-index:0; pointer-events:none; overflow:visible;}
+  .cell{
+    position:relative; z-index:1; border:none; padding:0; margin:0;
+    width:var(--cell); height:var(--cell); border-radius:50%;
+    background:var(--tile); color:var(--ink); font-family:inherit; font-weight:bold;
+    font-size:calc(var(--cell) * 0.44); cursor:pointer; touch-action:none;
+  }
+  .cell.on{background:transparent; color:#fff;}
+  .cell.pick{background:transparent; color:#fff;}
+  .cell.hint{box-shadow:inset 0 0 0 3px var(--accent);}
+  .board.shake{animation:shake .4s;}
+  @keyframes shake{0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)}}
+
+  .status{display:flex; align-items:center; gap:10px; margin-top:10px;}
+  .found{font-size:14px; font-weight:bold;}
+  .found small{display:block; font-weight:normal; opacity:.75; font-size:11.5px;}
+  .dots{display:flex; gap:5px; margin-left:auto;}
+  .dot{width:11px; height:11px; border-radius:50%; background:rgba(255,255,255,.25);}
+  .dot.lit{background:var(--bonus);}
+  .hintbtn{border:none; border-radius:14px; padding:11px 14px; font-family:inherit; font-weight:bold;
+           font-size:15px; color:#fff; background:var(--accent); box-shadow:0 4px 0 #2b7fb8; cursor:pointer;}
+  .hintbtn[disabled]{background:rgba(255,255,255,.18); box-shadow:0 4px 0 rgba(0,0,0,.2); opacity:.6;}
+  .hintbtn:active:not([disabled]){transform:translateY(2px); box-shadow:0 2px 0 #2b7fb8;}
+
+  .toast{
+    position:fixed; left:50%; bottom:calc(10px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%);
+    background:rgba(0,0,0,.78); color:#fff; padding:10px 16px; border-radius:14px;
+    font-size:15px; font-weight:bold; opacity:0; pointer-events:none; transition:opacity .25s; z-index:40;
+    max-width:90vw; text-align:center;
+  }
+  .toast.on{opacity:1;}
+
+  .wordlist{margin-top:10px; display:flex; flex-wrap:wrap; gap:6px; justify-content:center;}
+  .chip{background:rgba(255,255,255,.16); border-radius:11px; padding:4px 9px; font-size:12px; font-weight:bold;}
+  .chip.span{background:var(--gold); color:#3b2c00;}
+
+  /* ---------------- win ---------------- */
+  .win{position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:24px;
+       background:rgba(8,18,28,.75); z-index:60;}
+  .win.on{display:flex;}
+  .wincard{background:#fff; color:var(--ink); border-radius:24px; padding:24px 20px; text-align:center;
+           max-width:340px; width:100%; animation:pop .4s;}
+  @keyframes pop{0%{transform:scale(.8)} 60%{transform:scale(1.08)} 100%{transform:scale(1)}}
+  .wincard .em{font-size:52px;}
+  .wincard h2{margin:6px 0 4px; font-size:23px;}
+  .wincard p{margin:0 0 16px; font-size:14.5px; opacity:.75;}
+  .wbtns{display:flex; gap:10px;}
+  .wbtns button{flex:1; border:none; border-radius:15px; padding:14px 8px; font-family:inherit;
+                font-weight:bold; font-size:16px; color:#fff; background:var(--accent);
+                box-shadow:0 4px 0 #2b7fb8; cursor:pointer;}
+  .wbtns button.ghost{background:#eef3fb; color:var(--ink); box-shadow:0 4px 0 #c9d4e6;}
+
+  #cheer{position:fixed; inset:0; pointer-events:none; z-index:70; overflow:hidden;}
+  #cheer span{position:absolute; font-size:26px; animation:fall linear forwards;}
+  @keyframes fall{from{transform:translateY(-40px) rotate(0)} to{transform:translateY(105vh) rotate(400deg)}}
+</style>
+</head>
+<body>
+<div id="cheer"></div>
+<div class="toast" id="toast"></div>
+
+<div class="app">
+  <header>
+    <button class="iconbtn" id="back" aria-label="Back">&#8592;</button>
+    <div class="htitle" id="htitle">Word Snakes</div>
+    <button class="iconbtn show" id="mute" aria-label="Sound">&#128266;</button>
+  </header>
+
+  <section class="screen on" id="s-menu">
+    <div class="hero">
+      <h1>Word Snakes</h1>
+      <p>Wind through the letters to find the hidden words</p>
+    </div>
+    <div class="plist" id="plist"></div>
+    <p class="note">
+      Every letter belongs to one answer &mdash; there is nothing left over.<br>
+      One answer is the <b>spangram</b>: it names the theme and stretches
+      right across the board.
+    </p>
+  </section>
+
+  <section class="screen" id="s-play">
+    <div class="clue"><b id="c-theme"></b><span id="c-clue"></span></div>
+    <div class="boardwrap">
+      <div class="board" id="board"><svg id="lines"></svg></div>
+    </div>
+    <div class="status">
+      <div class="found"><span id="f-count"></span><small id="f-span"></small></div>
+      <div class="dots" id="dots"><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
+      <button class="hintbtn" id="hint" disabled>Hint</button>
+    </div>
+    <div class="wordlist" id="wordlist"></div>
+  </section>
+</div>
+
+<div class="win" id="win">
+  <div class="wincard">
+    <div class="em" id="w-em">&#127881;</div>
+    <h2 id="w-title"></h2>
+    <p id="w-text"></p>
+    <div class="wbtns">
+      <button class="ghost" id="w-menu">Puzzles</button>
+      <button id="w-next">Next one</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ==========================================================================
+   WORD SNAKES - a winding word puzzle.
+   Each board is six wide and eight tall, and every one of the 48 letters
+   belongs to exactly one answer, so there are no spare letters. One answer
+   is the spangram: it names the theme and reaches two opposite sides.
+   The boards were packed and checked before being written in here.
+   ========================================================================== */
+
+var PUZZLES = [{"id":"space","theme":"Cakes in Space","clue":"Watch out for the killer cakes!","spangram":"CAKESINSPACE","grid":"AICIGCILYNEHENRRPABUNSSCKCSNREAESIROOPTOBONOTEKC","answers":[{"word":"CAKESINSPACE","path":[25,30,24,31,26,33,27,22,16,17,23,29]},{"word":"ALIEN","path":[0,7,6,12,13]},{"word":"ICING","path":[1,2,3,9,4]},{"word":"CHERRY","path":[5,11,10,15,14,8]},{"word":"BUNS","path":[18,19,20,21]},{"word":"ROBOT","path":[28,35,40,39,38]},{"word":"SPOON","path":[32,37,36,43,42]},{"word":"ROCKET","path":[34,41,47,46,45,44]}],"extras":["ACER","ACES","ACRE","ACRES","ASPEN","BETS","BINS","BIOS","BITE","BITES","BITS","BOISE","BOOK","BORE","BORIS","BORN","BOSE","BOSS","BOSTON","BOTS","BRIT","BROCK","BROKE","BROOK","BROOKE","BROS","BUCK","BUCKET","BUNNY","BURN","BURNER","BURNERS","BURNS","BURR","BURY","BUSES","CAKE","CAKES","CAPE","CAPS","CASE","CASPER","CASS","CEASE","CERN","CEST","CHAP","CHASE","CHASER","CHEAP","CHEN","CHENG","CHER","CLIN","COKE","CORE","CORES","CORN","CORR","CRIB","CRISES","CRISP","CUBE","CURL","CURLY","CURRENCY","CURRY","CYRUS","EASE","ERIN","ERNST","ESCAPE","HEAP","HENRY","HERS","INCL","INNS","INST","ISSUE","KEPT","LIEN","LIEU","LINE","LINN","LINUS","LYING","LYNN","NEIL","NILE","NIST","NOPE","NOTE","NOTEBOOK","NOTES","NUKE","OOPS","ORBIT","OTIS","OTTO","PACE","PACK","PACKET","PACKETS","PASS","PEACE","PEAK","PEAS","PECK","PENCIL","PERRY","PERS","PESO","PEST","PETE","PETS","PHASE","POET","POETS","POTS","REAP","RECAP","REIGN","REPS","RESP","RINSE","RIOT","RISE","RISES","RITE","ROBE","ROBIN","ROBOTS","ROCK","ROCKETS","ROSE","ROSES","ROSS","RUNS","RUSS","SECS","SEPT","SETS","SINS","SIRE","SITE","SITES","SITS","SORE","SPACE","SPACES","SPAS","SPEAK","SPEC","SPECS","SPOT","STEAK","STEP","STIR","STOKE","STOP","STORE","STORES","SUCK","SUNNY","SUNS","TEAK","TIBET","TIRE","TIRES","TISSUE","TOON","TOPEKA","TOPS","TORI","TORN","TOSS","TOTE","USES","USSR"]},{"id":"lake","theme":"Swallows and Amazons","clue":"Sailing and camping on the lake","spangram":"SWALLOWSANDAMAZONS","grid":"PSWTCAARAONAALRCPRMZLHOTAOOSNADWNPEISNNIRTAANCYA","answers":[{"word":"SWALLOWSANDAMAZONS","path":[1,2,8,13,20,25,31,36,42,37,30,24,18,12,19,26,32,27]},{"word":"PARROT","path":[0,6,7,14,9,3]},{"word":"CAPTAIN","path":[4,11,16,23,29,35,28]},{"word":"ANCHOR","path":[5,10,15,21,22,17]},{"word":"PIRATE","path":[33,39,40,47,41,34]},{"word":"NANCY","path":[38,43,44,45,46]}],"extras":["AARON","ACORN","ACTA","ACTOR","ALAMO","ALAS","ALLOW","ALLOWS","ALMA","AMAZON","ANCIENT","ANITA","ANNA","ANNIE","APRON","ARCH","AREA","ARENA","ARES","ARIA","ARIES","AROSE","ARROW","ARROWS","ARTE","ASAP","CALL","CALLS","CALM","CANT","CARL","CARLO","CARLOS","CARP","CARR","CARROT","CARS","CART","CARTON","CASA","CHOP","CHOSE","CHOSEN","CHOW","CLOSE","CLOSER","CLOSET","CLOWN","COACH","COAL","COAT","COCA","COCO","COCOA","COCOS","CONE","CONS","CONT","CONTRA","CONTRACT","CORAL","CORN","CORP","CORR","COWS","CRATE","CREATOR","CRIES","CROP","CROW","DAMON","DAWN","DOLL","DOLLAR","DOLLARS","DONNA","DOWN","DOWNS","EPIC","ERIC","ERIN","HOOD","HOODS","HOPE","HOPES","HORN","HOSE","INNS","INSERT","INSPIRE","INTO","INTRA","INTRO","LAMA","LAPS","LARS","LAWS","LOAD","LOADS","LOOP","LOOPS","LOOSE","LOSE","LOSER","LOWS","MADONNA","MALL","MALLS","MARA","MARROW","MARS","MODS","MONIES","MONO","MOON","MOOSE","NASA","NATO","NEAT","NINA","NOPE","NORA","NOSE","OLSON","OMAR","ONES","ONSET","OOPS","OPEN","OPENS","OPERA","ORAL","OSLO","OWNS","PACT","PALM","PALMA","PANT","PARA","PARAM","PART","PARTNER","PENS","PERCY","PESO","PHONE","PHONES","PIER","PIES","PINS","PIRATES","POLL","POLO","POOL","POOLS","PORCH","PORN","PORNO","PORT","POSE","PRAY","PRES","PRINT","PROC","PRONE","PROS","PROSE","PSALM","RAMA","RAMON","RANCH","RANCHO","RANT","RATE","RATES","RENO","RENT","REPS","RESORT","RESP","RINSE","RIPE","RITA","RITE","ROACH","ROSE","ROWS","SALMON","SAND","SARA","SEAN","SEAT","SENATOR","SENT","SHOP","SHORT","SHOT","SHOW","SHOWN","SHOWS","SLOPE","SLOW","SNIPER","SNOOP","SNOW","SOHO","SOLO","SONIC","SOON","SOPRANO","SORT","SPARROW","SPENT","SPICY","SPIN","SPIRIT","SPOON","SPRAY","SPRINT","SWALLOW","TACO","TALL","TARA","TENOR","TENS","TENT","TIER","TIES","TINA","TIRE","TIRES","TONE","TONER","TONES","TONS","TORCH","TORN","TRAC","TRACT","TRACTOR","TRAN","TRAP","TRAY","TREAT","TRENT","TRES","TRIES","TRINA","TRIP","TRIPS","TYRE","TYRES","WACO","WALL","WALLS","WARP","WARS","WONT","WOOD","WOODS","WOOL","WRAP","WRAPS","ZOOM"]},{"id":"five","theme":"The Famous Five","clue":"Five children and a dog on an adventure","spangram":"FAMOUSFIVE","grid":"TNJUGTNUGLEIEEIROMFLMAMCIAOYNASUANEVALSSDVNNEFIE","answers":[{"word":"FAMOUSFIVE","path":[18,25,20,26,31,38,45,46,41,47]},{"word":"TUNNEL","path":[0,7,1,6,12,19]},{"word":"JULIAN","path":[2,3,9,14,21,28]},{"word":"GEORGE","path":[4,10,16,15,8,13]},{"word":"TIMMY","path":[5,11,17,22,27]},{"word":"CAVES","path":[23,29,35,34,39]},{"word":"ISLAND","path":[24,30,37,32,33,40]},{"word":"ANNE","path":[36,42,43,44]}],"extras":["ACME","ACNE","AIRMAIL","AISLE","ALAN","ALAS","ALIEN","ALIGN","ALMA","ALMANAC","ALMOND","ALONE","AMELIA","AMEN","AMMO","AMOR","ANNA","ANNALS","ANNOYED","ANSI","ANYMORE","ANYONE","ARGUE","ARIEL","ARMY","AROMA","ASIA","ASIDE","AUSSIE","CANE","CANNED","CANYON","CAVE","COLE","COLI","COMA","COME","COMET","COMM","COMMA","COMMIT","CORE","DEAN","DENSE","DENY","DISNEY","DIVE","EDEN","ELEM","EMAIL","EMMA","ENAMEL","ENCORE","ENDS","ENEMY","ERIE","ESSAY","EUGENE","EVAN","EVEN","FAIL","FAME","FAMOUS","FEEL","FELONY","FEMALE","FILE","FILM","FIVE","FLAME","FLEE","GENE","GEORGIA","GEORGIAN","GERMAN","GERMANY","GIRL","GLORIA","GLUE","GRAM","GRANNY","GRAY","GREG","GRIEF","GRIM","GUIANA","IDEA","IRAN","ISDN","ISLANDS","ISLE","ISLES","ITEM","JULIA","JULIE","JUNE","JUNGLE","LAMA","LAME","LAND","LANDS","LANE","LANES","LEMMA","LEMON","LENA","LENS","LENT","LESS","LIAR","LIEN","LIEU","LIFE","LIMA","LIME","LIMO","LIRA","LISA","LOAN","LOANS","LONE","LORE","LORI","LOUIS","LOYAL","LUIS","MAIL","MAILER","MALE","MALI","MAMA","MANA","MANN","MANY","MAORI","MARE","MARIE","MAVEN","MAYA","MAYO","MENT","MENU","MERGE","MIGUEL","MILE","MIRA","MOLE","MONA","MONDE","MONEY","MORAN","MORE","MORMON","MOUSE","NAIL","NAME","NAOMI","NASA","NASAL","NEGRO","NEIL","NEMO","NESS","NOUS","OMAN","OMAR","OMIT","ONES","ORIENT","ORIG","RAIL","RAMA","RAMON","RAYMOND","RELIEF","ROLE","ROMAN","ROME","SAFE","SAIL","SALE","SALEM","SALES","SALMON","SALON","SALONS","SALSA","SAME","SAMOA","SAND","SANDS","SANE","SANS","SAUL","SEAM","SEAN","SEND","SENSE","SENSUAL","SIAM","SIDE","SIDNEY","SILENT","SUSAN","TERM","TIER","TIGER","TIME","TIMER","TIMOR","TUNE","USES","VANESSA","VENOM","VESSEL","VESSELS","VISA","VISAS","YALE","YMCA"]},{"id":"seven","theme":"The Secret Seven","clue":"A secret club with a password","spangram":"SECRETSEVEN","grid":"PRSIPRDAOGEESWEJNTSSAVANENTLEBTSESDAERCGESCAMPER","answers":[{"word":"SECRETSEVEN","path":[31,36,42,37,32,26,19,14,21,28,23]},{"word":"PASSWORD","path":[0,7,12,18,13,8,1,6]},{"word":"SIGNAL","path":[2,3,9,16,22,27]},{"word":"PETER","path":[4,10,17,11,5]},{"word":"JANET","path":[15,20,25,24,30]},{"word":"BADGES","path":[29,35,34,39,46,41]},{"word":"SCAMPER","path":[33,38,43,44,45,40,47]}],"extras":["ACER","ACES","ACRE","ACRES","ALAN","ALAS","ALEC","ALERT","ALERTS","ALTER","ANGER","ANGIE","ANNE","ANTE","ANTS","ARENA","ARES","ARSENAL","ARTE","ARTS","ASSES","ASSET","ASSETS","ASST","AVANT","AWARD","AWARDS","BADGE","BADGER","BAJA","BALD","BANG","BANJO","BANNED","BANNER","BASE","BASED","BASES","BEAD","BEADS","BEAN","BEAT","BEATEN","BEDS","BELT","BELTS","BENT","BEST","CAMP","CAMPER","CAMPERS","CARE","CARES","CARS","CART","CARTE","CARTS","CELEB","CENT","CENTER","CENTERS","CENTRE","CENTRES","CENTS","CERT","CEST","CREAM","CRESCENT","CREST","CRETE","DEAL","DEALER","DEALERS","DEALS","DEALT","DEAN","DEBATE","DEEP","DEER","DELTA","DENT","DENTAL","DESC","DESCENT","DESERT","DRAW","DRAWS","EARS","EASE","EASIER","EAST","EASTER","EATEN","EATER","EATS","EDEN","EDGE","EDGES","ELDER","ELDERS","ELEC","ELSE","ENTER","ENTERS","ENTRE","EVAL","EVAN","EVANS","EVEN","EVENT","GEAR","GEARS","GENE","GENES","GENTLE","GETS","GOES","IOWA","JANE","JAVA","JAWS","JEAN","JEANS","JEEP","JENNA","JESS","JESSE","JEWS","LANE","LANES","LANG","LAST","LASTS","LATE","LATENT","LATER","LATEST","LAVA","LAWS","LEAD","LEADER","LEADERS","LEADS","LEAN","LEASE","LEASED","LEASES","LEAVE","LEAVES","LEDGER","LEDS","LEGS","LENA","LENS","LENSES","LENT","LEST","LESTER","LETS","MACS","MARC","MARCEL","MARE","MARS","MART","NATE","NATL","NAVAJO","NAVAL","NEAL","NEAT","NESS","NEST","NETS","PADS","PASO","PASS","PASSES","PEAS","PEDESTAL","PEER","PEERS","PERS","PEST","PESTS","PETE","PIER","PIGS","PREGNANT","PROG","PROS","RACE","RACES","RAMP","READ","READS","REDS","REED","REESE","REGENT","REGENTS","REIGN","RELATE","RELEASE","RELEASED","RELEASES","RELEVANT","RENAL","RENT","RENTAL","RENTALS","RENTS","RESET","RESETS","REST","RESTS","ROAD","ROADS","ROGER","ROSA","ROWAN","ROWS","SALE","SALES","SALT","SALTS","SANE","SANS","SAVE","SAVED","SAVES","SAWS","SCAM","SCAR","SCARCE","SCARE","SCARS","SCENE","SCENES","SCENT","SCREAM","SEAL","SEALED","SEALS","SEAM","SEAN","SEARS","SEAS","SEAT","SEATS","SECRET","SECRETS","SECS","SEED","SEEDS","SEES","SENATE","SENECA","SENSE","SENSES","SENT","SERENA","SETS","SEVEN","SEVENTEEN","SIEGE","SIENA","SIGN","SIGNALS","SLAB","SLANG","SLATE","SLATER","SLAVE","SLAVES","SOAP","SOAR","STAN","STEAM","STREAM","SWAN","SWAP","SWEAR","SWEAT","SWEATER","SWEATERS","SWORD","SWORDS","TALE","TALENT","TALENTS","TALES","TANG","TANGO","TANNED","TANNER","TEAM","TEAR","TEARS","TEEN","TELE","TENS","TENSE","TENT","TENTS","TERM","TEST","TESTER","TESTERS","TESTS","TRAC","TRACE","TRACES","TRENT","TRES","VALE","VALET","VANESSA","VANS","VASE","VASES","VAST","VENT","VEST","VESTS","WALES","WALT","WALTER","WANT","WANTS","WARD","WARDS","WARP","WARS","WASTE","WASTES","WATER","WATERS","WAVE","WAVES","WEAR","WEARS","WEAVE","WEST","WOES","WORD","WORDS"]},{"id":"rundell","theme":"Katherine Rundell","clue":"Creatures of the Archipelago","spangram":"IMPOSSIBLECREATURES","grid":"TREDNGUARSERENAFISRGIFITCBONPMELISOKSNISRKXPHNEA","answers":[{"word":"IMPOSSIBLECREATURES","path":[22,29,28,34,33,39,32,25,31,30,24,18,12,7,0,6,1,2,9]},{"word":"DRAGON","path":[3,8,14,19,26,27]},{"word":"NEST","path":[4,10,17,23]},{"word":"GRIFFIN","path":[5,11,16,15,21,20,13]},{"word":"KRAKEN","path":[35,40,47,41,46,45]},{"word":"SPHINX","path":[36,43,44,38,37,42]}],"extras":["AERO","AEROSOL","AKRON","ANGER","AREA","ARES","AROSE","ARRANGE","BENIN","BIAS","BIASED","BINGO","BINS","BIOL","BIOS","BISON","BLISS","BLOSSOM","BOIL","BOING","BOISE","BONO","BOSS","CLIN","CLIP","CLIPS","CLONING","CREATURE","CREATURES","DEAN","DEAR","DEFINE","DEFINING","DENSE","DESERT","DESIRE","DESIRES","DRAG","DRAGONS","DRAIN","EARN","EARNS","EARS","EDEN","ENDS","ERASE","EROSION","FARE","FARES","FENDER","FERN","FEST","FIBRE","FIFE","FINE","FINGER","FINISH","FINS","FIRE","FIRED","FIRES","FIRST","FIST","FITS","FOIL","FOSSIL","FOSSILS","FRASER","FRAU","FRAUEN","FRED","GAIN","GAINS","GARDE","GARDEN","GARDENS","GARNER","GASES","GEAR","GEARED","GEARS","GENDER","GENRE","GENRES","GOSSIP","GREAT","GRIEF","HIPS","IBIS","IMPOSE","INFO","INFOS","INIT","INLINE","IONS","ISDN","ISIS","KAREN","KERN","KOREA","LENS","LINE","LINEAR","LINER","LINERS","LINES","LINING","LION","LIONS","LIPS","LISP","LOGAN","LOGIN","LOIS","LOSS","MINI","MINING","MINOR","MINORS","MINS","MIPS","MIST","MONO","MORE","MORSE","MOSS","NATURE","NEAR","NEAT","NESS","NILE","NINA","NINE","NIST","NOBEL","NOBLE","NOISE","NORA","NOSE","OFFENDER","OFFENDERS","OFFENSE","OFFER","OFFERS","OFFS","OILS","OMIT","PHIL","PILE","PILES","PINE","PINES","PINS","PISS","PITS","POKER","PORK","PORN","POSE","POSSIBLE","RAGE","RAIN","RAINS","RAKE","RANG","RANGE","RANGER","RARE","REAR","REDS","REFINE","REFINING","REFRAIN","REGAIN","REGARD","REGARDS","REGINA","REGION","REGIONS","RENDER","RENDERS","RESIN","RESIST","REST","REUNION","RISE","RISEN","RISES","ROSE","ROSS","SAFE","SAFER","SAGE","SANE","SANG","SARA","SEAN","SEARS","SEAT","SEND","SENDER","SENDS","SENSE","SERIF","SHIN","SHINE","SHINES","SHIP","SHIPS","SIMON","SIMPSON","SINS","SION","SIRE","SITS","SLIP","SLOGAN","SNEAK","SOFA","SOFAS","SOFIA","SOIL","SOILS","SOLE","SONS","SORE","SPIN","SPINE","SPIT","SPOKE","SPOKEN","STIFF","STIR","TANG","TANGIBLE","TANGO","TARA","TIED","TIER","TIES","TIFF","TIMOR","TIPS","TIRE","TIRED","TIRES","TRAN","TRES","TRUE","TUNA","TUNE","TUNER","UNIFIED","UNION","UNIONS"]},{"id":"family","theme":"Our Family","clue":"The people who live in your house and beyond","spangram":"OURFAMILY","grid":"GNANDMURIFAIORNELXGFAMILRAAMIYNDOLMMPMEGAAASUNMA","answers":[{"word":"OURFAMILY","path":[12,6,13,19,26,21,22,23,29]},{"word":"GRANDMA","path":[0,7,2,3,4,5,10]},{"word":"NINA","path":[1,8,14,20]},{"word":"FELIX","path":[9,15,16,11,17]},{"word":"GRANDPA","path":[18,24,25,30,31,36,42]},{"word":"MOMELI","path":[27,32,37,38,33,28]},{"word":"MAGNUS","path":[34,40,39,45,44,43]},{"word":"MAMA","path":[35,41,46,47]}],"extras":["ADAM","AFRO","AGED","AGES","AGNES","ALAMO","ALAN","ALFA","ALIEN","ALLY","ALMA","ALOE","AMELIA","AMEN","AMID","AMMO","AMPS","ANAL","ANGEL","ANGELA","ANGELO","ANGLE","ANGLES","ANGLO","ANGOLA","ANGUS","ARIA","ARIEL","AXLE","DALE","DAME","DAMN","DANA","DANIEL","DARN","DELI","DEMO","DIAL","DIANA","DILEMMA","DIXIE","DOES","DOME","DRAG","EARN","EARNING","EARRING","EMILY","EMMA","ENGL","FADE","FAIL","FAIR","FALL","FAME","FAMILY","FEAR","FELL","FEMALE","FEMALES","FINAL","FINALE","FINALLY","FIND","FINE","FLEA","FOUR","FRAME","FROG","GALA","GALE","GAMMA","GARDE","GARDEN","GEMS","GENUS","GLAD","GLEN","GOAL","GOES","GRAD","GRADE","GRADES","GRAIN","GRAM","GRAND","GRANDE","GRIEF","GRIN","GRIND","IMAGE","IMAGES","INDIA","INFO","IRAN","LADEN","LAID","LAMA","LAME","LAND","LANE","LANES","LANG","LEAD","LEAF","LEAN","LEANING","LEARN","LEARNING","LEMMA","LENA","LIEN","LILY","LIMA","LIME","LIMO","LOAD","LOAN","LOGAN","MADE","MAFIA","MAGE","MAGNUM","MAID","MAIL","MAILMAN","MALE","MALES","MALI","MALL","MANA","MANGO","MANIA","MANUEL","MAPS","MARIA","MARIAN","MARIANA","MARIE","MARINA","MARINE","MAXI","MAXIM","MAXIMAL","MEAD","MEAL","MEAN","MEANING","MEDAL","MENU","MENUS","MESA","MILAN","MILE","MILES","MILL","MIME","MIMI","MODAL","MODE","MODEL","MODEM","MODEMS","MODES","MOLE","MOMMA","MOMMY","MOMS","MUSE","NAIL","NAME","NAOMI","NEAL","NEAR","NEIL","NELLY","NEMO","NINE","OMAN","OMAR","OMEGA","ORGAN","PAMELA","RAFAEL","RAIN","RAINFALL","RAMA","RAMADA","RAND","RANDALL","RANDOM","RANG","RIFLE","RING","SAME","SAMOA","SAMUEL","SEDAN","SPAM","SUED","SUNG","URINE","USED"]}];
+
+PUZZLES.forEach(function(p){ p.grid = p.grid.split(""); });
+
+var ROWS = 8, COLS = 6, N = ROWS * COLS;
+var WORD_COLOURS = ["#e2557a","#7b61ff","#2f9ec4","#5bc236","#ff8a3d","#c14ecf","#1f9e8f","#e0483c"];
+
+var $ = function(id){ return document.getElementById(id); };
+
+/* ---------- saved progress ---------- */
+var store = {
+  read: function(){
+    try{ return JSON.parse(localStorage.getItem("wordsnakes") || "{}"); }
+    catch(e){ return {}; }
+  },
+  write: function(o){ try{ localStorage.setItem("wordsnakes", JSON.stringify(o)); }catch(e){} }
+};
+var state = store.read();
+if(!state.done){ state.done = {}; }
+if(typeof state.sound !== "boolean"){ state.sound = true; }
+
+/* ---------- sound, made in the browser so nothing needs downloading ---------- */
+var actx = null;
+function beep(freq, len, type){
+  if(!state.sound){ return; }
+  try{
+    if(!actx){ actx = new (window.AudioContext || window.webkitAudioContext)(); }
+    if(actx.state === "suspended"){ actx.resume(); }
+    var o = actx.createOscillator(), g = actx.createGain();
+    o.type = type || "sine";
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.001, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.16, actx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + len);
+    o.connect(g); g.connect(actx.destination);
+    o.start(); o.stop(actx.currentTime + len + 0.02);
+  }catch(e){}
+}
+function sndTick(){ beep(440 + Math.random()*120, 0.05, "triangle"); }
+function sndGood(){ beep(660, 0.12); setTimeout(function(){ beep(880, 0.15); }, 100); }
+function sndSpan(){ [660,880,1100].forEach(function(f,i){ setTimeout(function(){ beep(f, 0.16); }, i*110); }); }
+function sndBonus(){ beep(780, 0.09, "square"); }
+function sndNo(){ beep(170, 0.16, "sawtooth"); }
+function sndWin(){ [523,659,784,1046].forEach(function(f,i){ setTimeout(function(){ beep(f, 0.18); }, i*130); }); }
+function buzz(p){ if(navigator.vibrate){ try{ navigator.vibrate(p); }catch(e){} } }
+
+function cheer(){
+  var box = $("cheer"), bits = ["🎉","⭐","🐍","📚","✨","🎊"];
+  for(var i = 0; i < 22; i++){
+    var s = document.createElement("span");
+    s.textContent = bits[Math.floor(Math.random()*bits.length)];
+    s.style.left = (Math.random()*96) + "%";
+    s.style.animationDuration = (1.6 + Math.random()*1.3) + "s";
+    s.style.animationDelay = (Math.random()*0.4) + "s";
+    box.appendChild(s);
+    (function(el){ setTimeout(function(){ el.remove(); }, 3400); })(s);
+  }
+}
+
+function toast(msg){
+  var t = $("toast");
+  t.textContent = msg;
+  t.classList.add("on");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(function(){ t.classList.remove("on"); }, 1500);
+}
+
+/* ---------- the menu ---------- */
+function paintMenu(){
+  var list = $("plist");
+  list.innerHTML = "";
+  PUZZLES.forEach(function(p, i){
+    var b = document.createElement("button");
+    b.className = "pcard";
+    b.innerHTML = "<span class='num'>" + (i+1) + "</span>" +
+                  "<span><b>" + p.theme + "</b><span>" + p.clue + "</span></span>" +
+                  "<span class='state'>" + (state.done[p.id] ? "✅" : "") + "</span>";
+    b.onclick = function(){ sndTick(); openPuzzle(i); };
+    list.appendChild(b);
+  });
+}
+
+function show(name){
+  $("s-menu").classList.toggle("on", name === "menu");
+  $("s-play").classList.toggle("on", name === "play");
+  $("back").classList.toggle("show", name === "play");
+  $("htitle").textContent = name === "play" ? "Word Snakes" : "";   /* the menu has a big title already */
+  $("win").classList.remove("on");
+  window.scrollTo(0, 0);
+}
+$("back").onclick = function(){ sndTick(); show("menu"); paintMenu(); };
+
+/* ==========================================================================
+   playing a board
+   ========================================================================== */
+var P = null;          /* the puzzle being played */
+var cells = [];        /* the 48 buttons */
+var solved = {};       /* word -> true */
+var cellOwner = [];    /* cell -> word that has been solved there */
+var sel = [];          /* cells currently picked out */
+var dragging = false, moved = false;
+var bonusWords = {}, bonusCount = 0, hintsReady = 0, hintWord = null;
+
+function openPuzzle(i){
+  P = PUZZLES[i];
+  P.index = i;
+  solved = {};
+  cellOwner = new Array(N);
+  sel = [];
+  bonusWords = {}; bonusCount = 0; hintsReady = 0; hintWord = null;
+
+  $("c-theme").textContent = P.theme;
+  $("c-clue").textContent = P.clue;
+  buildBoard();
+  paintAll();
+  show("play");
+}
+
+function buildBoard(){
+  var board = $("board");
+  /* keep the svg, replace the letters */
+  Array.prototype.slice.call(board.querySelectorAll(".cell")).forEach(function(c){ c.remove(); });
+  cells = [];
+  for(var i = 0; i < N; i++){
+    var b = document.createElement("button");
+    b.className = "cell";
+    b.textContent = P.grid[i];
+    b.dataset.i = i;
+    board.appendChild(b);
+    cells.push(b);
+  }
+}
+
+function rc(i){ return [Math.floor(i / COLS), i % COLS]; }
+function adjacent(a, b){
+  var x = rc(a), y = rc(b);
+  var dr = Math.abs(x[0] - y[0]), dc = Math.abs(x[1] - y[1]);
+  return (dr <= 1 && dc <= 1) && (dr + dc > 0);
+}
+
+/* ---------- drawing the snakes ---------- */
+function centre(i){
+  var c = cells[i], board = $("board");
+  return [c.offsetLeft - 6 + c.offsetWidth / 2, c.offsetTop - 6 + c.offsetHeight / 2];
+}
+function snake(path, colour, width, fade){
+  var NS = "http://www.w3.org/2000/svg";
+  var g = document.createElementNS(NS, "g");
+  if(fade){ g.setAttribute("opacity", fade); }
+  /* Each step is its own rounded segment, with a blob on every letter. Drawing
+     it as one long polyline left hairline seams where a snake doubled back on
+     itself; overlapping opaque pieces cannot. Group opacity keeps the overlaps
+     from showing through each other. */
+  path.forEach(function(cell, k){
+    var mid = centre(cell);
+    if(k){
+      var prev = centre(path[k - 1]);
+      var seg = document.createElementNS(NS, "line");
+      seg.setAttribute("x1", prev[0]); seg.setAttribute("y1", prev[1]);
+      seg.setAttribute("x2", mid[0]);  seg.setAttribute("y2", mid[1]);
+      seg.setAttribute("stroke", colour);
+      seg.setAttribute("stroke-width", width);
+      seg.setAttribute("stroke-linecap", "round");
+      g.appendChild(seg);
+    }
+    var dot = document.createElementNS(NS, "circle");
+    dot.setAttribute("cx", mid[0]);
+    dot.setAttribute("cy", mid[1]);
+    dot.setAttribute("r", width / 2);
+    dot.setAttribute("fill", colour);
+    g.appendChild(dot);
+  });
+  return g;
+}
+
+function paintAll(){
+  var svg = $("lines");
+  var board = $("board");
+  svg.setAttribute("width", board.clientWidth - 12);
+  svg.setAttribute("height", board.clientHeight - 12);
+  svg.innerHTML = "";
+
+  var cellSize = cells[0] ? cells[0].offsetWidth : 40;
+  var band = Math.max(14, cellSize * 0.78);
+
+  /* answers already found */
+  P.answers.forEach(function(a, n){
+    if(!solved[a.word]){ return; }
+    var colour = a.word === P.spangram ? "#f2b705" : WORD_COLOURS[n % WORD_COLOURS.length];
+    svg.appendChild(snake(a.path, colour, band));
+  });
+  /* the letters being picked out right now */
+  if(sel.length){
+    svg.appendChild(snake(sel, "#4aa3df", band, "0.95"));
+  }
+
+  cells.forEach(function(c, i){
+    c.className = "cell" +
+      (cellOwner[i] ? " on" : "") +
+      (sel.indexOf(i) > -1 ? " pick" : "") +
+      (hintWord && hintWord.path.indexOf(i) > -1 && !solved[hintWord.word] ? " hint" : "");
+  });
+
+  var total = P.answers.length;
+  var got = Object.keys(solved).length;
+  $("f-count").textContent = got + " of " + total + " found";
+  $("f-span").textContent = solved[P.spangram] ? "spangram found!" : "spangram still hiding";
+
+  var dots = $("dots").children;
+  var towards = hintsReady > 0 ? 3 : bonusCount % 3;   /* three ordinary words earn a hint */
+  for(var d = 0; d < 3; d++){
+    dots[d].className = "dot" + (d < towards ? " lit" : "");
+  }
+  $("hint").disabled = hintsReady < 1;
+  $("hint").textContent = hintsReady > 0 ? "Hint ready!" : "Hint";
+
+  var wl = $("wordlist");
+  wl.innerHTML = "";
+  P.answers.forEach(function(a){
+    if(!solved[a.word]){ return; }
+    var s = document.createElement("span");
+    s.className = "chip" + (a.word === P.spangram ? " span" : "");
+    s.textContent = a.word;
+    wl.appendChild(s);
+  });
+}
+
+/* ---------- picking letters out ---------- */
+function cellAt(x, y){
+  var el = document.elementFromPoint(x, y);
+  if(!el || !el.classList || !el.classList.contains("cell")){ return -1; }
+  return parseInt(el.dataset.i, 10);
+}
+
+function tryAdd(i){
+  if(i < 0 || cellOwner[i]){ return; }
+  var at = sel.indexOf(i);
+  if(at > -1){
+    /* stepping back the way you came */
+    if(at === sel.length - 2){ sel.pop(); paintAll(); }
+    return;
+  }
+  if(sel.length && !adjacent(sel[sel.length - 1], i)){ return; }
+  sel.push(i);
+  sndTick();
+  paintAll();
+}
+
+function onDown(e){
+  var i = cellAt(e.clientX, e.clientY);
+  if(i < 0){ return; }
+  e.preventDefault();
+  if(sel.length && i === sel[sel.length - 1]){ submit(); return; }   /* tap the last letter to send */
+  if(sel.length && adjacent(sel[sel.length - 1], i) && sel.indexOf(i) < 0 && !cellOwner[i]){
+    dragging = true; moved = false;
+    tryAdd(i);
+    return;
+  }
+  if(cellOwner[i]){ return; }
+  sel = [i];
+  dragging = true; moved = false;
+  sndTick();
+  paintAll();
+}
+function onMove(e){
+  if(!dragging){ return; }
+  e.preventDefault();
+  var i = cellAt(e.clientX, e.clientY);
+  if(i < 0 || i === sel[sel.length - 1]){ return; }
+  moved = true;
+  tryAdd(i);
+}
+function onUp(){
+  if(dragging && moved && sel.length > 1){ submit(); }
+  dragging = false;
+}
+
+$("board").addEventListener("pointerdown", onDown);
+$("board").addEventListener("pointermove", onMove);
+window.addEventListener("pointerup", onUp);
+window.addEventListener("pointercancel", onUp);
+
+/* ---------- checking what was traced ---------- */
+function submit(){
+  if(sel.length < 2){ sel = []; paintAll(); return; }
+  var word = sel.map(function(i){ return P.grid[i]; }).join("");
+  var back = sel.slice().reverse().map(function(i){ return P.grid[i]; }).join("");
+
+  var answer = null;
+  P.answers.forEach(function(a){
+    if(!solved[a.word] && (a.word === word || a.word === back)){ answer = a; }
+  });
+  if(answer){ lockIn(answer); return; }
+
+  var bonus = (P.extras.indexOf(word) > -1 && word) || (P.extras.indexOf(back) > -1 && back);
+  if(bonus){
+    if(bonusWords[bonus]){
+      toast("Already found " + bonus);
+      sel = []; paintAll(); return;
+    }
+    bonusWords[bonus] = true;
+    bonusCount++;
+    sndBonus(); buzz(20);
+    if(bonusCount % 3 === 0){
+      hintsReady++;
+      toast(bonus + "! That is a hint earned 💡");
+    } else {
+      toast(bonus + "! " + (3 - (bonusCount % 3)) + " more for a hint");
+    }
+    sel = []; paintAll();
+    return;
+  }
+
+  sndNo(); buzz(60);
+  $("board").classList.add("shake");
+  setTimeout(function(){ $("board").classList.remove("shake"); }, 420);
+  sel = [];
+  paintAll();
+}
+
+function lockIn(answer){
+  solved[answer.word] = true;
+  answer.path.forEach(function(c){ cellOwner[c] = answer.word; });
+  if(hintWord && hintWord.word === answer.word){ hintWord = null; }
+  sel = [];
+  if(answer.word === P.spangram){
+    sndSpan(); buzz([30,50,30]);
+    toast("The spangram! " + answer.word);
+  } else {
+    sndGood(); buzz(30);
+  }
+  paintAll();
+
+  if(Object.keys(solved).length === P.answers.length){
+    state.done[P.id] = true;
+    store.write(state);
+    setTimeout(finish, 550);
+  }
+}
+
+function finish(){
+  var more = PUZZLES.some(function(p){ return !state.done[p.id]; });
+  $("w-em").textContent = "🎉";
+  $("w-title").textContent = "Board cleared!";
+  $("w-text").textContent = "You found all " + P.answers.length + " answers in " + P.theme + ".";
+  $("w-next").hidden = !more;
+  $("win").classList.add("on");
+  cheer(); sndWin();
+}
+$("w-menu").onclick = function(){ sndTick(); show("menu"); paintMenu(); };
+$("w-next").onclick = function(){
+  sndTick();
+  $("win").classList.remove("on");
+  for(var k = 1; k <= PUZZLES.length; k++){
+    var n = (P.index + k) % PUZZLES.length;
+    if(!state.done[PUZZLES[n].id]){ openPuzzle(n); return; }
+  }
+  show("menu"); paintMenu();
+};
+
+/* ---------- hints ---------- */
+$("hint").onclick = function(){
+  if(hintsReady < 1){ return; }
+  var left = P.answers.filter(function(a){ return !solved[a.word]; });
+  if(!left.length){ return; }
+  /* a word that is not already being pointed at */
+  var fresh = left.filter(function(a){ return !hintWord || a.word !== hintWord.word; });
+  hintWord = (fresh.length ? fresh : left)[Math.floor(Math.random() * (fresh.length ? fresh.length : left.length))];
+  hintsReady--;
+  sndGood();
+  toast("These letters make one answer");
+  paintAll();
+};
+
+/* ---------- sound toggle ---------- */
+function paintMute(){ $("mute").innerHTML = state.sound ? "🔊" : "🔇"; }
+$("mute").onclick = function(){
+  state.sound = !state.sound;
+  store.write(state);
+  paintMute();
+  if(state.sound){ sndTick(); }
+};
+
+window.addEventListener("resize", function(){ if(P){ paintAll(); } });
+
+paintMenu();
+paintMute();
+show("menu");
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).catch(function(){});
+  });
+  navigator.serviceWorker.addEventListener("message", function(e){
+    if(!e.data || e.data.type !== "new-version"){ return; }
+    try{
+      if(sessionStorage.getItem("ws-refreshed")){ return; }
+      sessionStorage.setItem("ws-refreshed", "1");
+    }catch(err){}
+    location.reload();
+  });
+}
+</script>
+</body>
+</html>
