@@ -53,7 +53,8 @@
   .stage{position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center;
          flex:1; min-height:230px;}
   #die{display:block; touch-action:manipulation; cursor:pointer;}
-  .prompt{font-size:14px; opacity:.85; margin-top:2px; height:20px; text-align:center;}
+  .prompt{font-size:14px; opacity:.85; margin-top:2px; min-height:20px; text-align:center;}
+  .prompt .big{font-size:26px; font-weight:bold; color:var(--gold); vertical-align:-3px; letter-spacing:1px;}
 
   .rollbtn{
     border:none; border-radius:17px; padding:15px 10px; width:100%; font-family:inherit;
@@ -168,7 +169,7 @@
    ========================================================================== */
 
 var $ = function(id){ return document.getElementById(id); };
-var GAMES_PER_DAY = 2;
+var GAMES_PER_DAY = 1;
 
 /* ---------------- categories a seven-year-old can have a go at ------------- */
 var CATEGORIES = [
@@ -204,10 +205,52 @@ function freshDay(){
   if(state.day !== todayKey()){
     state.day = todayKey();
     state.played = 0;
+    state.game = null;
     store.write(state);
   }
 }
 function gamesLeft(){ freshDay(); return Math.max(0, GAMES_PER_DAY - (state.played || 0)); }
+
+/* keep the half-finished game, so closing the page and coming back carries on
+   where it left off rather than counting as a fresh go */
+function saveGame(){
+  if(!locked || finished || !landedFace){ return; }
+  state.game = {
+    cat: CATEGORIES.indexOf(cat),
+    letter: landedFace.letter,
+    answers: answers.map(function(a){ return { text:a.text, plain:a.plain, known:a.known }; })
+  };
+  store.write(state);
+}
+function restoreGame(){
+  freshDay();
+  if(!state.game){ return false; }
+  var saved = state.game, f = null;
+  SOLID.faces.forEach(function(x){ if(x.letter === saved.letter){ f = x; } });
+  if(!f || !CATEGORIES[saved.cat]){ state.game = null; store.write(state); return false; }
+
+  cat = CATEGORIES[saved.cat];
+  answers = (saved.answers || []).slice(0, 5);
+  landedFace = f; target = f;
+  locked = true; finished = false;
+
+  /* stand the die back on the face that was rolled */
+  body.q = qBetween(f.n, [0, 1, 0]);
+  body.p = [0, f.rest, 0];
+  body.v = [0,0,0]; body.w = [0,0,0];
+
+  $("cat-name").textContent = cat.name;
+  $("prompt").innerHTML = "Carry on! Your letter is <span class='big'>" + f.letter + "</span>";
+  $("entry").value = "";
+  $("entry").disabled = false;
+  $("entry").placeholder = "Something starting with " + f.letter + "…";
+  $("add").disabled = false;
+  $("roll").disabled = true;
+  paintSlots();
+  paintPlays();
+  paintHint();
+  return true;
+}
 
 /* ==========================================================================
    sound, all made in the browser
@@ -451,7 +494,7 @@ function project(p){
   var cz = y * SP + p[2] * CP;
   var depth = CAM_DIST - cz;
   if(depth < 0.4){ depth = 0.4; }
-  var f = (W * 1.75) / depth;
+  var f = (W * 1.70) / depth;
   return [W/2 + p[0] * f, H/2 - cy * f, depth];
 }
 
@@ -489,7 +532,7 @@ var body = {
   asleep:true
 };
 var rolling = false, settling = false, settleT = 0, settleFrom = null, settleTo = null;
-var settleFromY = 0, settleToY = 0, stillFor = 0, rollClock = 0;
+var settleFromY = 0, settleToY = 0, settleLen = 0.2, stillFor = 0, rollClock = 0;
 var landedFace = null, target = null, locked = false;
 var lastFrame = 0, contactSound = 0;
 
@@ -577,8 +620,16 @@ function stepPhysics(h){
 
   var hit = floorContact(h) + rimContact();
 
-  body.v[0] *= LIN_DAMP; body.v[1] *= LIN_DAMP; body.v[2] *= LIN_DAMP;
-  body.w[0] *= ANG_DAMP; body.w[1] *= ANG_DAMP; body.w[2] *= ANG_DAMP;
+  var ld = LIN_DAMP, ad = ANG_DAMP;
+  /* a soft mat soaks up the last of the energy, so the die does not dawdle
+     through a long slow wobble before it finally stops */
+  if(body.p[1] < 1.05 &&
+     Math.hypot(body.v[0], body.v[1], body.v[2]) < 0.7 &&
+     Math.hypot(body.w[0], body.w[1], body.w[2]) < 1.8){
+    ld = 0.988; ad = 0.975;
+  }
+  body.v[0] *= ld; body.v[1] *= ld; body.v[2] *= ld;
+  body.w[0] *= ad; body.w[1] *= ad; body.w[2] *= ad;
   return hit;
 }
 
@@ -592,20 +643,21 @@ function topFace(){
   return best;
 }
 
-/* tip it flat onto that face, then turn it so we can read the letter */
+/* Let it lie where it fell. All this does is finish the last topple if the
+   die stopped propped on an edge - it is never turned to face the reader,
+   because that twist is exactly what made the ending look wrong. By the time
+   we get here most rolls are already flat to within a fiftieth of a degree,
+   so there is usually nothing to do at all. */
 function beginSettle(){
   var f = topFace();
   var m = qMatrix(body.q);
-  var q1 = qMul(qBetween(apply(m, f.n), [0,1,0]), body.q);
-  var up = apply(qMatrix(q1), f.v);
-  var flatLen = Math.hypot(up[0], up[2]) || 1;
-  var a = [up[0]/flatLen, 0, up[2]/flatLen];
-  var want = [0, 0, -1];                       /* away from the camera reads as upright */
-  var ang = Math.atan2(a[2]*want[0] - a[0]*want[2], a[0]*want[0] + a[2]*want[2]);
+  var off = Math.acos(Math.min(1, Math.max(-1, apply(m, f.n)[1])));   /* radians off flat */
   settleFrom = body.q;
-  settleTo = qNorm(qMul(qFromAxis([0,1,0], ang), q1));
+  settleTo = qNorm(qMul(qBetween(apply(m, f.n), [0,1,0]), body.q));
   settleFromY = body.p[1];
   settleToY = f.rest;
+  /* a bigger lean takes longer to fall over, like a real one would */
+  settleLen = Math.max(0.05, Math.min(0.34, 0.06 + (off / 0.35) * 0.26));
   settling = true; settleT = 0;
   target = f;
 }
@@ -785,12 +837,14 @@ function frame(now){
     var speed = Math.hypot(body.v[0], body.v[1], body.v[2]);
     var spin = Math.hypot(body.w[0], body.w[1], body.w[2]);
     var low = body.p[1] < 1.05;
-    stillFor = (speed < 0.55 && spin < 1.4 && low) ? stillFor + dt : 0;
-    if(stillFor > 0.16 || rollClock > 6){ beginSettle(); }
+    /* wait until it really has stopped; cutting in early is what left a visible
+       correction at the end of the roll */
+    stillFor = (speed < 0.12 && spin < 0.30 && low) ? stillFor + dt : 0;
+    if(stillFor > 0.22 || rollClock > 6){ beginSettle(); }
   } else if(settling){
     settleT += dt;
-    var t = Math.min(1, settleT / 0.34);
-    var e = 1 - Math.pow(1 - t, 3);
+    var t = Math.min(1, settleT / settleLen);
+    var e = t * t * (3 - 2 * t);      /* tips away, then eases down onto the face */
     body.q = qSlerp(settleFrom, settleTo, e);
     body.p[1] = settleFromY + (settleToY - settleFromY) * e;
     body.v = [0,0,0]; body.w = [0,0,0];
@@ -812,7 +866,8 @@ function land(){
   landedFace = target;
   popSparks();
   chime(); buzz([25, 40, 25]);
-  $("prompt").innerHTML = "You rolled <b>" + target.letter + "</b> &middot; roll again, or start typing";
+  $("prompt").innerHTML = "You rolled <span class='big'>" + target.letter +
+                          "</span> &middot; roll again, or start typing";
   if(gamesLeft() > 0){
     $("entry").disabled = false;
     $("entry").placeholder = "Something starting with " + target.letter + "…";
@@ -846,8 +901,9 @@ function newGame(){
 }
 
 function paintPlays(){
-  var left = gamesLeft();
-  $("plays").innerHTML = left + " game" + (left === 1 ? "" : "s") + "<br>left today";
+  if(locked && !finished){ $("plays").innerHTML = "game in<br>progress"; }
+  else if(gamesLeft() === 0){ $("plays").innerHTML = "back<br>tomorrow"; }
+  else { $("plays").innerHTML = "one game<br>today"; }
 }
 
 function paintSlots(){
@@ -866,7 +922,7 @@ function paintSlots(){
 function paintHint(){
   if(finished){ return; }
   if(gamesLeft() === 0 && !locked){
-    $("hintline").textContent = "No games left today — but you can still roll the dice as much as you like!";
+    $("hintline").textContent = "That is today's game done — but you can still roll the dice as much as you like!";
     return;
   }
   if(!landedFace){
@@ -881,8 +937,7 @@ function paintHint(){
 function lockIn(){
   if(locked || !landedFace){ return; }
   locked = true;
-  state.played = (state.played || 0) + 1;
-  store.write(state);
+  saveGame();
   $("roll").disabled = true;
   paintPlays();
   toast("Letter locked: " + landedFace.letter + "!");
@@ -910,6 +965,7 @@ function addAnswer(){
 
   var known = !!cat.set[plain];
   answers.push({ text: raw, plain: plain, known: known });
+  saveGame();
   $("entry").value = "";
   paintSlots();
   paintHint();
@@ -932,12 +988,17 @@ function shakeEntry(){
 
 function finish(){
   finished = true;
+  state.played = (state.played || 0) + 1;    /* a game counts once it is finished */
+  state.game = null;
+  store.write(state);
+  paintPlays();
   $("entry").disabled = true;
   $("add").disabled = true;
   var stars = answers.filter(function(a){ return a.known; }).length;
   $("w-em").textContent = "🎉";
   $("w-title").textContent = "Five for " + landedFace.letter + "!";
-  $("w-text").textContent = cat.name + " · " + stars + " of 5 were on our list";
+  $("w-text").textContent = cat.name + " · " + stars + " of 5 were on our list" +
+                            (gamesLeft() === 0 ? " · see you tomorrow!" : "");
   var ul = $("w-list");
   ul.innerHTML = "";
   answers.forEach(function(a){
@@ -946,7 +1007,7 @@ function finish(){
     ul.appendChild(li);
   });
   $("w-again").hidden = gamesLeft() === 0;
-  $("w-again").textContent = "Play again (" + gamesLeft() + " left)";
+  $("w-again").textContent = "Play again";
   $("win").classList.add("on");
   cheer(); fanfare();
   $("hintline").textContent = "";
@@ -998,7 +1059,7 @@ $("mute").onclick = function(){
 window.addEventListener("resize", sizeCanvas);
 sizeCanvas();
 paintMute();
-newGame();
+if(!restoreGame()){ newGame(); }
 requestAnimationFrame(frame);
 
 if("serviceWorker" in navigator){
