@@ -54,12 +54,6 @@
          flex:1; min-height:230px;}
   #die{display:block; touch-action:manipulation; cursor:pointer;}
   .prompt{font-size:14px; opacity:.85; margin-top:2px; height:20px; text-align:center;}
-  .landed{
-    position:absolute; top:6px; left:50%; transform:translateX(-50%);
-    font-size:13px; font-weight:bold; letter-spacing:2px; opacity:0; transition:opacity .3s;
-    text-transform:uppercase; color:var(--gold);
-  }
-  .landed.on{opacity:1;}
 
   .rollbtn{
     border:none; border-radius:17px; padding:15px 10px; width:100%; font-family:inherit;
@@ -70,14 +64,12 @@
   .rollbtn[disabled]{background:rgba(255,255,255,.16); color:rgba(255,255,255,.6); box-shadow:0 5px 0 rgba(0,0,0,.2);}
 
   /* ---------------- answers ---------------- */
-  .answers{margin-top:10px;}
-  .slots{display:flex; flex-direction:column; gap:6px;}
-  .slot{display:flex; align-items:center; gap:9px; background:rgba(255,255,255,.12);
-        border-radius:13px; padding:10px 12px; font-size:15px; min-height:42px;}
-  .slot .n{width:22px; height:22px; border-radius:50%; background:rgba(255,255,255,.2);
-           font-size:12px; font-weight:bold; display:flex; align-items:center; justify-content:center; flex:none;}
-  .slot.full{background:rgba(70,198,109,.28);}
-  .slot .mark{margin-left:auto; font-size:16px;}
+  .answers{margin-top:8px;}
+  .count{font-size:12.5px; font-weight:bold; opacity:.8; text-align:center; margin-bottom:5px;}
+  .chips{display:flex; flex-wrap:wrap; gap:6px; justify-content:center; min-height:30px;}
+  .chip{background:rgba(70,198,109,.3); border-radius:12px; padding:5px 10px; font-size:13.5px;
+        font-weight:bold; animation:pop .3s;}
+  .chip.blank{background:rgba(255,255,255,.1); opacity:.5; min-width:34px; text-align:center;}
   .entry{display:flex; gap:8px; margin-top:9px;}
   .entry input{
     flex:1; min-width:0; border:none; border-radius:14px; padding:13px 14px; font-family:inherit;
@@ -134,7 +126,6 @@
   <div class="cat"><small>Name five</small><b id="cat-name">&nbsp;</b></div>
 
   <div class="stage">
-    <div class="landed" id="landed">you rolled</div>
     <canvas id="die"></canvas>
     <div class="prompt" id="prompt">Tap the dice to roll it!</div>
   </div>
@@ -142,7 +133,8 @@
   <button class="rollbtn" id="roll">&#127922; Roll the dice</button>
 
   <div class="answers">
-    <div class="slots" id="slots"></div>
+    <div class="count" id="count">0 of 5</div>
+      <div class="chips" id="chips"></div>
     <div class="entry">
       <input id="entry" type="text" autocomplete="off" autocorrect="off" autocapitalize="words"
              spellcheck="false" placeholder="Roll a letter first" disabled>
@@ -354,6 +346,16 @@ function cross(a, b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1
 function unit(a){ var l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0]/l, a[1]/l, a[2]/l]; }
 
 var SOLID = buildDie();
+(function normalise(){
+  /* scale to circumradius 1, so distances in the simulation are in die-radii */
+  var R = Math.hypot(SOLID.verts[0][0], SOLID.verts[0][1], SOLID.verts[0][2]);
+  SOLID.verts = SOLID.verts.map(function(v){ return [v[0]/R, v[1]/R, v[2]/R]; });
+  SOLID.faces.forEach(function(f){
+    f.mid = [f.mid[0]/R, f.mid[1]/R, f.mid[2]/R];
+    f.rest = dot(f.mid, f.n);          /* centre height when this face is face down */
+  });
+  SOLID.radius = 1;
+})();
 /* rarer letters go on the little triangles, the everyday ones on the squares */
 var TRI_LETTERS = "JQVXZKWY".split("");
 var SQ_LETTERS = "ABCDEFGHILMNOPRSTU".split("");
@@ -419,161 +421,232 @@ function qBetween(from, to){
   return qNorm([1 + d, c[0], c[1], c[2]]);
 }
 
-/* the face we want ends up tilted towards the camera, letter the right way up */
-var SHOW_DIR = unit([0, 0.42, 1]);
-function restingQuat(face){
-  var q0 = qBetween(face.n, SHOW_DIR);
-  var m = qMatrix(q0);
-  var up = apply(m, face.v);
-  /* flatten onto the plane facing the camera, then twist until it stands upright */
-  var want = [0, 1, 0];
-  var flat = function(v){
-    var k = dot(v, SHOW_DIR);
-    return unit([v[0]-SHOW_DIR[0]*k, v[1]-SHOW_DIR[1]*k, v[2]-SHOW_DIR[2]*k]);
-  };
-  var a = flat(up), b = flat(want);
-  var ang = Math.atan2(dot(cross(a, b), SHOW_DIR), dot(a, b));
-  return qNorm(qMul(qFromAxis(SHOW_DIR, ang), q0));
-}
-
 /* ==========================================================================
-   drawing
+   drawing: a camera looking down at a mat, with everything projected properly
    ========================================================================== */
 var cv = $("die"), ctx = cv.getContext("2d");
 var W = 0, H = 0, DPR = 1;
 function sizeCanvas(){
   var wrap = cv.parentNode;
-  var side = Math.min(wrap.clientWidth, Math.round(window.innerHeight * 0.40), 360);
-  side = Math.max(180, side);
+  W = Math.max(200, Math.min(wrap.clientWidth, 420));
+  H = Math.max(160, Math.min(Math.round(W * 0.92), Math.round(window.innerHeight * 0.50)));
   DPR = Math.min(window.devicePixelRatio || 1, 2.5);
-  W = side; H = side;
-  cv.style.width = side + "px";
-  cv.style.height = side + "px";
-  cv.width = Math.round(side * DPR);
-  cv.height = Math.round(side * DPR);
+  cv.style.width = W + "px";
+  cv.style.height = H + "px";
+  cv.width = Math.round(W * DPR);
+  cv.height = Math.round(H * DPR);
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 }
 
-var LIGHT = unit([-0.45, 0.8, 0.75]);
-var CAM_Z = 13.5;
+var LIGHT = unit([-0.42, 0.86, 0.62]);
+var PITCH = 0.80;              /* how far the camera leans over the mat */
+var LOOK_Y = 1.20;             /* what it is aimed at */
+var CAM_DIST = 8.0;
+var SP = Math.sin(PITCH), CP = Math.cos(PITCH);
 
-function project(p, scale){
-  var z = CAM_Z - p[2];
-  var f = scale / z;
-  return [W/2 + p[0]*f, H/2 - p[1]*f, z];
+/* world -> camera -> screen */
+function project(p){
+  var y = p[1] - LOOK_Y;
+  var cy = y * CP - p[2] * SP;
+  var cz = y * SP + p[2] * CP;
+  var depth = CAM_DIST - cz;
+  if(depth < 0.4){ depth = 0.4; }
+  var f = (W * 1.75) / depth;
+  return [W/2 + p[0] * f, H/2 - cy * f, depth];
 }
 
-function drawDie(q, lift, blur){
-  /* fade the previous frame instead of wiping it: that is the motion blur */
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  if(blur > 0){
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.fillStyle = "rgba(0,0,0," + blur + ")";
-    ctx.fillRect(0, 0, W, H);
-    ctx.globalCompositeOperation = "source-over";
-  } else {
-    ctx.clearRect(0, 0, W, H);
+/* a circle lying flat on the floor, drawn in proper perspective */
+function floorRing(cx, cz, r, steps){
+  var pts = [];
+  for(var i = 0; i < steps; i++){
+    var a = i / steps * Math.PI * 2;
+    pts.push(project([cx + Math.cos(a) * r, 0, cz + Math.sin(a) * r]));
   }
-
-  var scale = W * 1.62;
-  var m = qMatrix(q);
-
-  /* the shadow shrinks and sharpens as the die comes down */
-  var high = Math.max(0, lift);
-  var sy = H * 0.90;
-  var sw = W * (0.30 - high * 0.05);
-  var sh = sw * 0.26;
-  ctx.save();
-  ctx.globalAlpha = Math.max(0.05, 0.3 - high * 0.09);
-  ctx.filter = "blur(" + (3 + high * 3) + "px)";
-  ctx.fillStyle = "#000";
+  return pts;
+}
+function tracePath(pts){
   ctx.beginPath();
-  ctx.ellipse(W/2, sy, Math.max(6, sw), Math.max(3, sh), 0, 0, Math.PI*2);
-  ctx.fill();
-  ctx.restore();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for(var i = 1; i < pts.length; i++){ ctx.lineTo(pts[i][0], pts[i][1]); }
+  ctx.closePath();
+}
 
-  var moved = SOLID.verts.map(function(v){
+/* ==========================================================================
+   the die as a rigid body: gravity, bounces, friction, and a tumble that
+   comes out of the collisions rather than being drawn on top of them
+   ========================================================================== */
+var MASS = 1;
+var INERTIA = 0.40 * MASS;         /* near enough a sphere of radius 1 */
+var GRAVITY = -19.5;
+var BOUNCE = 0.36;                 /* dice are not very bouncy */
+var FRICTION = 0.52;               /* this is what turns sliding into tumbling */
+var LIN_DAMP = 0.998, ANG_DAMP = 0.994;
+var MAT_R = 1.00;                  /* the rim it can bounce off */
+
+var body = {
+  p:[0, 0.863, 0], v:[0,0,0],
+  q:[1,0,0,0], w:[0,0,0],
+  asleep:true
+};
+var rolling = false, settling = false, settleT = 0, settleFrom = null, settleTo = null;
+var settleFromY = 0, settleToY = 0, stillFor = 0, rollClock = 0;
+var landedFace = null, target = null, locked = false;
+var lastFrame = 0, contactSound = 0;
+
+function bodyVerts(){
+  var m = qMatrix(body.q);
+  return SOLID.verts.map(function(v){
     var r = apply(m, v);
-    return [r[0], r[1] + lift * 2.2, r[2]];
-  });
-  var flat = moved.map(function(p){ return project(p, scale); });
-
-  var order = SOLID.faces.map(function(f, i){
-    var n = apply(m, f.n);
-    var c = apply(m, f.mid);
-    c[1] += lift * 2.2;
-    return { f:f, i:i, n:n, c:c, depth:c[2] };
-  }).filter(function(o){
-    /* keep only the faces pointing our way */
-    return dot(o.n, unit([ -o.c[0], -o.c[1], CAM_Z - o.c[2] ])) > 0.02;
-  }).sort(function(a, b){ return a.depth - b.depth; });
-
-  order.forEach(function(o){
-    var f = o.f;
-    var pts = f.idx.map(function(i){ return flat[i]; });
-    var lam = Math.max(0, dot(o.n, LIGHT));
-    var light = 30 + lam * 52;
-    var sat = f.tri ? 82 : 74;
-    ctx.beginPath();
-    ctx.moveTo(pts[0][0], pts[0][1]);
-    for(var i = 1; i < pts.length; i++){ ctx.lineTo(pts[i][0], pts[i][1]); }
-    ctx.closePath();
-    ctx.fillStyle = "hsl(" + f.hue + "," + sat + "%," + light + "%)";
-    ctx.fill();
-    /* a rim of light along the edges gives it some thickness */
-    ctx.lineWidth = Math.max(1, W * 0.006);
-    ctx.strokeStyle = "hsla(" + f.hue + "," + sat + "%," + Math.min(96, light + 26) + "%,.9)";
-    ctx.stroke();
-
-    /* a specular sheen on whichever faces catch the light */
-    if(lam > 0.72){
-      ctx.save();
-      ctx.globalAlpha = (lam - 0.72) * 1.7;
-      ctx.fillStyle = "#fff";
-      ctx.fill();
-      ctx.restore();
-    }
-
-    drawLetter(f, m, scale, lift, lam);
+    return [body.p[0] + r[0], body.p[1] + r[1], body.p[2] + r[2]];
   });
 }
 
-function drawLetter(f, m, scale, lift, lam){
-  var c = apply(m, f.mid);   c[1] += lift * 2.2;
-  var u = apply(m, f.u);
-  var v = apply(m, f.v);
-  var K = 100;   /* draw the glyph big and scale it down, so it stays crisp */
-  var p0 = project(c, scale);
-  var pu = project([c[0]+u[0], c[1]+u[1], c[2]+u[2]], scale);
-  var pv = project([c[0]+v[0], c[1]+v[1], c[2]+v[2]], scale);
-  var ux = (pu[0]-p0[0]) / K, uy = (pu[1]-p0[1]) / K;
-  var vx = (pv[0]-p0[0]) / K, vy = (pv[1]-p0[1]) / K;
-  ctx.save();
-  /* v points up the face but the screen counts downwards, so flip it */
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  ctx.transform(ux, uy, -vx, -vy, p0[0], p0[1]);
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = "bold " + (f.tri ? 74 : 116) + "px 'Trebuchet MS', Verdana, sans-serif";
-  ctx.fillStyle = lam > 0.5 ? "rgba(20,16,40,.88)" : "rgba(255,255,255,.93)";
-  ctx.fillText(f.letter, 0, f.tri ? 18 : 0);
-  ctx.restore();
+/* one collision resolved per substep: the deepest corner touching the floor */
+function floorContact(h){
+  var pts = bodyVerts();
+  var deep = -1, depth = 0;
+  for(var i = 0; i < pts.length; i++){
+    if(pts[i][1] < 0 && -pts[i][1] > depth){ depth = -pts[i][1]; deep = i; }
+  }
+  if(deep < 0){ return 0; }
+
+  body.p[1] += depth;                       /* lift it clear of the floor */
+  var hit = pts[deep];
+  var r = [hit[0] - body.p[0], hit[1] + depth - body.p[1], hit[2] - body.p[2]];
+  var n = [0, 1, 0];
+
+  /* velocity of the corner that is touching down */
+  var wr = cross(body.w, r);
+  var vc = [body.v[0] + wr[0], body.v[1] + wr[1], body.v[2] + wr[2]];
+  var vn = vc[1];
+  if(vn >= 0){ return 0; }
+
+  /* bounce impulse, shared between spin and travel by where the corner is */
+  var rn = cross(r, n);
+  var denom = 1/MASS + dot(rn, rn)/INERTIA;
+  var e = Math.abs(vn) < 1.2 ? BOUNCE * 0.45 : BOUNCE;   /* stop it pattering forever */
+  var j = -(1 + e) * vn / denom;
+  body.v[1] += j / MASS;
+  var tw = cross(r, [0, j, 0]);
+  body.w[0] += tw[0]/INERTIA; body.w[1] += tw[1]/INERTIA; body.w[2] += tw[2]/INERTIA;
+
+  /* friction along the floor: this is what makes it trip over its own corner */
+  var vt = [vc[0], 0, vc[2]];
+  var vtl = Math.hypot(vt[0], vt[2]);
+  if(vtl > 1e-5){
+    var t = [-vt[0]/vtl, 0, -vt[2]/vtl];
+    var rt = cross(r, t);
+    var jt = vtl / (1/MASS + dot(rt, rt)/INERTIA);
+    jt = Math.min(jt, FRICTION * j);
+    body.v[0] += t[0] * jt / MASS;
+    body.v[2] += t[2] * jt / MASS;
+    var fw = cross(r, [t[0]*jt, 0, t[2]*jt]);
+    body.w[0] += fw[0]/INERTIA; body.w[1] += fw[1]/INERTIA; body.w[2] += fw[2]/INERTIA;
+  }
+  return j;
 }
 
-/* sparkles when it lands */
+function rimContact(){
+  var d = Math.hypot(body.p[0], body.p[2]);
+  if(d < MAT_R){ return 0; }
+  var nx = body.p[0]/d, nz = body.p[2]/d;
+  body.p[0] = nx * MAT_R; body.p[2] = nz * MAT_R;
+  var into = body.v[0]*nx + body.v[2]*nz;
+  if(into <= 0){ return 0; }
+  body.v[0] -= (1 + 0.42) * into * nx;
+  body.v[2] -= (1 + 0.42) * into * nz;
+  body.w[0] *= 0.92; body.w[1] *= 0.92; body.w[2] *= 0.92;
+  return Math.abs(into);
+}
+
+function stepPhysics(h){
+  body.v[1] += GRAVITY * h;
+  body.p[0] += body.v[0] * h;
+  body.p[1] += body.v[1] * h;
+  body.p[2] += body.v[2] * h;
+
+  /* turn the spin into a change of orientation */
+  var wq = [0, body.w[0], body.w[1], body.w[2]];
+  var dq = qMul(wq, body.q);
+  body.q = qNorm([
+    body.q[0] + 0.5 * dq[0] * h,
+    body.q[1] + 0.5 * dq[1] * h,
+    body.q[2] + 0.5 * dq[2] * h,
+    body.q[3] + 0.5 * dq[3] * h
+  ]);
+
+  var hit = floorContact(h) + rimContact();
+
+  body.v[0] *= LIN_DAMP; body.v[1] *= LIN_DAMP; body.v[2] *= LIN_DAMP;
+  body.w[0] *= ANG_DAMP; body.w[1] *= ANG_DAMP; body.w[2] *= ANG_DAMP;
+  return hit;
+}
+
+/* whichever face is pointing at the ceiling once it stops */
+function topFace(){
+  var m = qMatrix(body.q), best = null, bestDot = -2;
+  SOLID.faces.forEach(function(f){
+    var d = apply(m, f.n)[1];
+    if(d > bestDot){ bestDot = d; best = f; }
+  });
+  return best;
+}
+
+/* tip it flat onto that face, then turn it so we can read the letter */
+function beginSettle(){
+  var f = topFace();
+  var m = qMatrix(body.q);
+  var q1 = qMul(qBetween(apply(m, f.n), [0,1,0]), body.q);
+  var up = apply(qMatrix(q1), f.v);
+  var flatLen = Math.hypot(up[0], up[2]) || 1;
+  var a = [up[0]/flatLen, 0, up[2]/flatLen];
+  var want = [0, 0, -1];                       /* away from the camera reads as upright */
+  var ang = Math.atan2(a[2]*want[0] - a[0]*want[2], a[0]*want[0] + a[2]*want[2]);
+  settleFrom = body.q;
+  settleTo = qNorm(qMul(qFromAxis([0,1,0], ang), q1));
+  settleFromY = body.p[1];
+  settleToY = f.rest;
+  settling = true; settleT = 0;
+  target = f;
+}
+
+/* a uniformly random attitude - the equivalent of shaking it in your fist
+   before you throw. Without this the die tends to come back down on the face
+   it went up on, and one letter turns up far too often. */
+function randomAttitude(){
+  var u1 = Math.random(), u2 = Math.random() * Math.PI * 2, u3 = Math.random() * Math.PI * 2;
+  var a = Math.sqrt(1 - u1), b = Math.sqrt(u1);
+  return qNorm([a * Math.cos(u2), a * Math.sin(u2), b * Math.cos(u3), b * Math.sin(u3)]);
+}
+
+function throwDie(){
+  var ang = Math.random() * Math.PI * 2;
+  body.q = randomAttitude();
+  body.p = [Math.cos(ang) * 0.35, 1.70 + Math.random() * 0.3, Math.sin(ang) * 0.35 - 0.12];
+  body.v = [-Math.cos(ang) * (0.5 + Math.random() * 0.6), -1.8 - Math.random(),
+            -Math.sin(ang) * (0.4 + Math.random() * 0.5)];
+  body.w = [(Math.random()*2-1) * 22, (Math.random()*2-1) * 22, (Math.random()*2-1) * 22];
+  body.asleep = false;
+  stillFor = 0; rollClock = 0;
+  settling = false;
+}
+
+/* ==========================================================================
+   painting a frame
+   ========================================================================== */
 var sparks = [];
 function popSparks(){
+  var base = project([body.p[0], 0.2, body.p[2]]);
   for(var i = 0; i < 20; i++){
-    var a = Math.random() * Math.PI * 2, sp = 4.5 + Math.random() * 5;
-    sparks.push({ x:W/2 + Math.cos(a) * W * 0.18, y:H/2 + Math.sin(a) * W * 0.18,
-                  vx:Math.cos(a)*sp, vy:Math.sin(a)*sp - 1.4, life:1,
-                  hue:Math.round(Math.random()*360) });
+    var a = Math.random() * Math.PI * 2, sp = 3.5 + Math.random() * 4.5;
+    sparks.push({ x:base[0], y:base[1], vx:Math.cos(a)*sp, vy:Math.sin(a)*sp - 2.4,
+                  life:1, hue:Math.round(Math.random()*360) });
   }
 }
 function drawSparks(dt){
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   sparks = sparks.filter(function(s){
-    s.x += s.vx; s.y += s.vy; s.vx *= 0.97; s.vy += 0.22; s.life -= dt * 1.9;
+    s.x += s.vx; s.y += s.vy; s.vx *= 0.97; s.vy += 0.3; s.life -= dt * 1.9;
     if(s.life <= 0){ return false; }
     ctx.globalAlpha = Math.max(0, s.life);
     ctx.fillStyle = "hsl(" + s.hue + ",95%,68%)";
@@ -585,27 +658,109 @@ function drawSparks(dt){
   });
 }
 
-/* ==========================================================================
-   the roll itself
-   ========================================================================== */
-var rot = qFromAxis([0.4, 1, 0.2], 0.6);
-var spin = [0.35, 0.5, 0.2];
-var rolling = false, rollT = 0, rollFrom = null, rollTo = null, target = null;
-var SPIN_TIME = 1.15, SETTLE_TIME = 0.72;
-var lastFrame = 0, nextClack = 0;
-var landedFace = null, locked = false;
+function drawScene(blur){
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if(blur >= 1){
+    ctx.clearRect(0, 0, W, H);
+  } else {
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = "rgba(0,0,0," + blur + ")";
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  /* the mat it lands on */
+  var mat = floorRing(0, 0, MAT_R + 0.75, 48);
+  tracePath(mat);
+  ctx.fillStyle = "rgba(255,255,255,.055)";
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(255,255,255,.14)";
+  ctx.stroke();
+
+  /* the shadow sits under wherever the die actually is */
+  var high = Math.max(0, body.p[1] - 0.8);
+  var shadow = floorRing(body.p[0], body.p[2], 0.95 + high * 0.16, 26);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0.06, 0.34 - high * 0.07);
+  ctx.filter = "blur(" + (3 + high * 3.5) + "px)";
+  ctx.fillStyle = "#000";
+  tracePath(shadow);
+  ctx.fill();
+  ctx.restore();
+
+  var m = qMatrix(body.q);
+  var moved = SOLID.verts.map(function(v){
+    var r = apply(m, v);
+    return [body.p[0] + r[0], body.p[1] + r[1], body.p[2] + r[2]];
+  });
+  var flat = moved.map(project);
+
+  /* camera position in world terms, for deciding which faces we can see */
+  var camera = [0, LOOK_Y + CAM_DIST * SP, CAM_DIST * CP];
+
+  SOLID.faces.map(function(f){
+    var n = apply(m, f.n);
+    var c = apply(m, f.mid);
+    c = [body.p[0] + c[0], body.p[1] + c[1], body.p[2] + c[2]];
+    return { f:f, n:n, c:c,
+             towards: dot(n, unit([camera[0]-c[0], camera[1]-c[1], camera[2]-c[2]])),
+             depth: project(c)[2] };
+  }).filter(function(o){ return o.towards > 0.015; })
+    .sort(function(a, b){ return b.depth - a.depth; })
+    .forEach(function(o){
+      var f = o.f;
+      var pts = f.idx.map(function(i){ return flat[i]; });
+      var lam = Math.max(0, dot(o.n, LIGHT));
+      var light = 30 + lam * 52;
+      var sat = f.tri ? 82 : 74;
+      tracePath(pts);
+      ctx.fillStyle = "hsl(" + f.hue + "," + sat + "%," + light + "%)";
+      ctx.fill();
+      ctx.lineWidth = Math.max(1, W * 0.006);
+      ctx.strokeStyle = "hsla(" + f.hue + "," + sat + "%," + Math.min(96, light + 26) + "%,.9)";
+      ctx.stroke();
+      if(lam > 0.72){
+        ctx.save();
+        ctx.globalAlpha = (lam - 0.72) * 1.7;
+        ctx.fillStyle = "#fff";
+        tracePath(pts);
+        ctx.fill();
+        ctx.restore();
+      }
+      drawLetter(f, m, lam);
+    });
+}
+
+function drawLetter(f, m, lam){
+  var c = apply(m, f.mid);
+  c = [body.p[0] + c[0], body.p[1] + c[1], body.p[2] + c[2]];
+  var u = apply(m, f.u), v = apply(m, f.v);
+  var K = 100;
+  var p0 = project(c);
+  var pu = project([c[0]+u[0], c[1]+u[1], c[2]+u[2]]);
+  var pv = project([c[0]+v[0], c[1]+v[1], c[2]+v[2]]);
+  ctx.save();
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  /* v runs up the face, the screen counts downwards, so flip it */
+  ctx.transform((pu[0]-p0[0])/K, (pu[1]-p0[1])/K,
+                -(pv[0]-p0[0])/K, -(pv[1]-p0[1])/K, p0[0], p0[1]);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "bold " + (f.tri ? 30 : 46) + "px 'Trebuchet MS', Verdana, sans-serif";
+  ctx.fillStyle = lam > 0.5 ? "rgba(20,16,40,.88)" : "rgba(255,255,255,.93)";
+  ctx.fillText(f.letter, 0, f.tri ? 7 : 0);
+  ctx.restore();
+}
 
 function rollDice(){
   if(rolling){ return; }
   if(locked){ toast("Your letter is locked in - finish this game!"); return; }
-  rolling = true; rollT = 0;
-  landedFace = null;
-  $("landed").classList.remove("on");
+  rolling = true;
+  landedFace = null; target = null;
   $("prompt").textContent = "Rolling…";
-  target = SOLID.faces[Math.floor(Math.random() * SOLID.faces.length)];
-  rollTo = restingQuat(target);
-  spin = [ (Math.random()*2-1) * 9 + 5, (Math.random()*2-1) * 9 + 6, (Math.random()*2-1) * 7 ];
-  nextClack = 0.06;
+  contactSound = 0;
+  throwDie();
   whoosh(); buzz(18);
 }
 
@@ -613,46 +768,42 @@ function frame(now){
   var dt = Math.min(0.05, (now - lastFrame) / 1000 || 0.016);
   lastFrame = now;
 
-  var lift = 0, blur = 1;
-  if(rolling){
-    rollT += dt;
-    if(rollT < SPIN_TIME){
-      var decay = 1 - rollT / SPIN_TIME;
-      var k = dt * (0.35 + decay * 1.9);
-      rot = qNorm(qMul(qFromAxis([1,0,0], spin[0]*k), rot));
-      rot = qNorm(qMul(qFromAxis([0,1,0], spin[1]*k), rot));
-      rot = qNorm(qMul(qFromAxis([0,0,1], spin[2]*k), rot));
-      rollFrom = rot;
-      blur = 0.30 + 0.5 * (rollT / SPIN_TIME);
-      /* a clack each time it tips over onto a new face */
-      nextClack -= dt;
-      if(nextClack <= 0){
-        clack(0.14 + 0.12 * decay, 900 + Math.random() * 1800);
-        nextClack = 0.07 + (1 - decay) * 0.16;
-      }
-    } else {
-      var t = Math.min(1, (rollT - SPIN_TIME) / SETTLE_TIME);
-      var e = 1 - Math.pow(1 - t, 3);
-      rot = qSlerp(rollFrom, rollTo, e);
-      blur = 0.55 + 0.45 * t;
-      if(t >= 1){
-        rolling = false;
-        rot = rollTo;
-        land();
-      }
+  if(rolling && !settling){
+    rollClock += dt;
+    /* fixed small steps keep the collisions well behaved */
+    var steps = Math.min(12, Math.ceil(dt / (1/240)));
+    var h = dt / steps;
+    var biggest = 0;
+    for(var i = 0; i < steps; i++){ biggest = Math.max(biggest, stepPhysics(h)); }
+
+    if(biggest > 0.35 && now - contactSound > 45){
+      clack(Math.min(0.3, 0.06 + biggest * 0.05), 700 + Math.random() * 2000);
+      contactSound = now;
+      if(biggest > 2.2){ buzz(12); }
     }
-    /* two bounces on the way down */
-    var p = rollT / (SPIN_TIME + SETTLE_TIME);
-    lift = Math.max(0, Math.abs(Math.sin(p * Math.PI * 2.1)) * (1 - p) * 1.25);
-  } else {
-    /* a slow idle drift so it never looks frozen */
-    if(!locked){
-      rot = qNorm(qMul(qFromAxis([0.25, 1, 0.12], dt * 0.22), rot));
+
+    var speed = Math.hypot(body.v[0], body.v[1], body.v[2]);
+    var spin = Math.hypot(body.w[0], body.w[1], body.w[2]);
+    var low = body.p[1] < 1.05;
+    stillFor = (speed < 0.55 && spin < 1.4 && low) ? stillFor + dt : 0;
+    if(stillFor > 0.16 || rollClock > 6){ beginSettle(); }
+  } else if(settling){
+    settleT += dt;
+    var t = Math.min(1, settleT / 0.34);
+    var e = 1 - Math.pow(1 - t, 3);
+    body.q = qSlerp(settleFrom, settleTo, e);
+    body.p[1] = settleFromY + (settleToY - settleFromY) * e;
+    body.v = [0,0,0]; body.w = [0,0,0];
+    if(t >= 1){
+      settling = false; rolling = false; body.asleep = true;
+      land();
     }
-    blur = 1;
   }
 
-  drawDie(rot, lift, blur);
+  var moving = Math.hypot(body.v[0], body.v[1], body.v[2]) +
+               Math.hypot(body.w[0], body.w[1], body.w[2]) * 0.35;
+  var blur = rolling ? Math.max(0.3, Math.min(1, 1.15 - moving * 0.085)) : 1;
+  drawScene(blur);
   drawSparks(dt);
   requestAnimationFrame(frame);
 }
@@ -661,11 +812,10 @@ function land(){
   landedFace = target;
   popSparks();
   chime(); buzz([25, 40, 25]);
-  $("landed").classList.add("on");
   $("prompt").innerHTML = "You rolled <b>" + target.letter + "</b> &middot; roll again, or start typing";
   if(gamesLeft() > 0){
     $("entry").disabled = false;
-    $("entry").placeholder = "A " + cat.name.toLowerCase() + " starting with " + target.letter + "…";
+    $("entry").placeholder = "Something starting with " + target.letter + "…";
     $("add").disabled = false;
   }
   paintHint();
@@ -684,7 +834,6 @@ function newGame(){
   landedFace = null;
   target = null;
   $("cat-name").textContent = cat.name;
-  $("landed").classList.remove("on");
   $("prompt").textContent = "Tap the dice to roll it!";
   $("entry").value = "";
   $("entry").disabled = true;
@@ -702,16 +851,15 @@ function paintPlays(){
 }
 
 function paintSlots(){
-  var box = $("slots");
+  var box = $("chips");
   box.innerHTML = "";
+  $("count").textContent = answers.length + " of 5";
   for(var i = 0; i < 5; i++){
     var a = answers[i];
-    var row = document.createElement("div");
-    row.className = "slot" + (a ? " full" : "");
-    row.innerHTML = "<span class='n'>" + (i+1) + "</span>" +
-                    "<span>" + (a ? a.text : "…") + "</span>" +
-                    (a ? "<span class='mark'>" + (a.known ? "⭐" : "✅") + "</span>" : "");
-    box.appendChild(row);
+    var chip = document.createElement("span");
+    chip.className = "chip" + (a ? "" : " blank");
+    chip.textContent = a ? ((a.known ? "⭐ " : "✅ ") + a.text) : "·";
+    box.appendChild(chip);
   }
 }
 
