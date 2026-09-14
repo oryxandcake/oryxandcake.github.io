@@ -41,8 +41,14 @@
   .iconbtn{border:none; background:rgba(255,255,255,.15); color:#fff; width:42px; height:42px;
            border-radius:13px; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center;}
   .htitle{flex:1; text-align:center; font-size:17px; font-weight:bold;}
-  .plays{background:rgba(255,255,255,.15); border-radius:13px; padding:7px 11px; font-size:12.5px;
-         font-weight:bold; white-space:nowrap; text-align:center; line-height:1.2;}
+  .plays{position:relative; overflow:hidden; background:rgba(255,255,255,.15); border-radius:13px;
+         padding:7px 11px; font-size:12.5px; font-weight:bold; white-space:nowrap; text-align:center;
+         line-height:1.2; -webkit-touch-callout:none; touch-action:manipulation;}
+  .plays span{position:relative; z-index:1;}
+  /* the grown-ups' way back in: hold this for ten seconds. Nothing shows for
+     the first few, so a stray tap gives nothing away. */
+  #plays-fill{position:absolute; left:0; top:0; bottom:0; width:0; z-index:0; opacity:0;
+              background:linear-gradient(90deg, rgba(255,201,60,.55), rgba(255,201,60,.9));}
 
   .cat{background:linear-gradient(135deg, var(--hot), #b14bd8); border-radius:var(--r);
        padding:11px 14px; text-align:center; margin:8px 0 4px; box-shadow:0 4px 0 rgba(0,0,0,.22);}
@@ -121,7 +127,7 @@
   <header>
     <button class="iconbtn" id="mute" aria-label="Sound">&#128266;</button>
     <div class="htitle">Letter Roll</div>
-    <div class="plays" id="plays"></div>
+    <div class="plays" id="plays"><i id="plays-fill"></i><span id="plays-text"></span></div>
   </header>
 
   <div class="cat"><small>Name five</small><b id="cat-name">&nbsp;</b></div>
@@ -901,10 +907,57 @@ function newGame(){
 }
 
 function paintPlays(){
-  if(locked && !finished){ $("plays").innerHTML = "game in<br>progress"; }
-  else if(gamesLeft() === 0){ $("plays").innerHTML = "back<br>tomorrow"; }
-  else { $("plays").innerHTML = "one game<br>today"; }
+  if(locked && !finished){ $("plays-text").innerHTML = "game in<br>progress"; }
+  else if(gamesLeft() === 0){ $("plays-text").innerHTML = "back<br>tomorrow"; }
+  else { $("plays-text").innerHTML = "one game<br>today"; }
 }
+
+/* ---------------- the grown-ups' reset ----------------
+   Press and hold the badge for ten seconds to give back today's game. There is
+   deliberately no sign of it for the first three, so it stays out of the way
+   unless somebody means it. */
+var HOLD_MS = 10000, holdStart = 0, holdTimer = null;
+
+function somethingToReset(){ return (state.played || 0) > 0 || !!state.game; }
+
+function holdTick(){
+  var t = (Date.now() - holdStart) / HOLD_MS;
+  if(t >= 1){ endHold(); doReset(); return; }
+  var show = Math.max(0, (t - 0.3) / 0.7);      /* invisible for the first three seconds */
+  $("plays-fill").style.width = (show * 100) + "%";
+  $("plays-fill").style.opacity = show > 0 ? 0.85 : 0;
+  if(show > 0 && Math.floor(t * 10) !== Math.floor((t - 0.016) * 10)){
+    tone(300 + show * 500, 0.05, "sine", 0.05);
+  }
+  holdTimer = requestAnimationFrame(holdTick);
+}
+function startHold(e){
+  if(!somethingToReset()){ return; }
+  if(e && e.preventDefault){ e.preventDefault(); }
+  holdStart = Date.now();
+  cancelAnimationFrame(holdTimer);
+  holdTimer = requestAnimationFrame(holdTick);
+}
+function endHold(){
+  cancelAnimationFrame(holdTimer);
+  holdTimer = null;
+  $("plays-fill").style.width = "0";
+  $("plays-fill").style.opacity = 0;
+}
+function doReset(){
+  state.played = 0;
+  state.game = null;
+  store.write(state);
+  locked = false; finished = false;
+  $("win").classList.remove("on");
+  newGame();
+  toast("Unlocked — one more game!");
+  chime(); buzz([30, 60, 30]);
+}
+["pointerdown"].forEach(function(ev){ $("plays").addEventListener(ev, startHold); });
+["pointerup","pointercancel","pointerleave"].forEach(function(ev){
+  $("plays").addEventListener(ev, endHold);
+});
 
 function paintSlots(){
   var box = $("chips");
