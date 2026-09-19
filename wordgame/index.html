@@ -460,6 +460,7 @@ var state = save.read();
 if(typeof state.sound !== "boolean"){ state.sound = true; }
 if(!state.progress){ state.progress = {}; }
 if(!state.today){ state.today = {}; }
+if(!state.open){ state.open = {}; }     /* a puzzle started but not finished */
 
 /* How many puzzles of each kind may be played per day.
    Change this one number to make the daily go longer or shorter. */
@@ -519,6 +520,18 @@ function startPuzzle(mode){
   return left[Math.floor(Math.random()*left.length)];
 }
 
+/* A puzzle you started but did not finish is kept, so wandering off and
+   coming back carries on where you were instead of losing the work AND a
+   turn. Resuming never costs a second turn - that was paid on the way in. */
+function saveOpen(mode, data){
+  state.open[mode] = data;
+  save.write(state);
+}
+function clearOpen(mode){
+  if(state.open[mode]){ delete state.open[mode]; save.write(state); }
+}
+function openPuzzleFor(mode){ return state.open[mode] || null; }
+
 /* remembering which ones are finished keeps the puzzles feeling fresh;
    one they could not get is left out, so it can come round again */
 function markPuzzleDone(mode, idx){
@@ -531,8 +544,8 @@ function markPuzzleDone(mode, idx){
 function paintTicks(){
   MODES.forEach(function(m){
     var n = playsLeftToday(m);
-    $("tick-"+m).innerHTML = n === 0 ? "🌙"
-      : "<span class='left'>" + n + " left<br>today</span>";
+    $("tick-"+m).innerHTML = state.open[m] ? "<span class='left'>carry<br>on</span>"
+      : (n === 0 ? "🌙" : "<span class='left'>" + n + " left<br>today</span>");
   });
   $("all-done").hidden = !doneForToday();
 }
@@ -587,6 +600,7 @@ function show(name){
   });
   $("title").textContent = TITLES[name];
   $("back").classList.toggle("show", name !== "home");
+  if(name === "home"){ paintTicks(); }   /* keep "carry on" and the counts honest */
   $("win").classList.remove("on");
   window.scrollTo(0,0);
 }
@@ -596,7 +610,7 @@ document.querySelectorAll(".mode").forEach(function(b){
   b.onclick = function(){
     sndTap();
     var m = b.getAttribute("data-go");
-    if(playsLeftToday(m) === 0){ celebrateDayOver(m); return; }
+    if(playsLeftToday(m) === 0 && !state.open[m]){ celebrateDayOver(m); return; }
     show(m);
     if(m === "groups"){ newGroups(); }
     if(m === "guess"){ newGuess(); }
@@ -638,20 +652,54 @@ $("win-again").onclick = function(){ sndTap(); $("win").classList.remove("on"); 
 var G = { set:null, idx:-1, tiles:[], sel:[], found:0 };
 
 function newGroups(){
-  var idx = startPuzzle("groups");
-  if(idx < 0){ celebrateDayOver("groups"); return; }
+  var saved = openPuzzleFor("groups"), idx;
+  if(saved && GROUP_SETS[saved.idx]){
+    idx = saved.idx;                       /* carry on; the turn is already spent */
+  } else {
+    idx = startPuzzle("groups");
+    if(idx < 0){ celebrateDayOver("groups"); return; }
+    saved = null;
+  }
   G.idx = idx;
   G.set = GROUP_SETS[idx];
   G.sel = [];
   G.found = 0;
   G.tiles = [];
-  Object.keys(G.set).forEach(function(k){
-    G.set[k].forEach(function(w){ G.tiles.push({ word:w, book:k }); });
-  });
-  G.tiles = shuffle(G.tiles);
+
+  if(saved && saved.tiles && saved.tiles.length){
+    G.tiles = saved.tiles.map(function(t){ return { word:t.word, book:t.book, done:!!t.done }; });
+  } else {
+    Object.keys(G.set).forEach(function(k){
+      G.set[k].forEach(function(w){ G.tiles.push({ word:w, book:k }); });
+    });
+    G.tiles = shuffle(G.tiles);
+  }
+
+  /* put back the rows that were already solved */
   $("g-solved").innerHTML = "";
+  Object.keys(G.set).forEach(function(k){
+    var got = G.tiles.filter(function(t){ return t.book === k && t.done; });
+    if(got.length !== G.set[k].length){ return; }
+    G.found++;
+    addSolvedRow(k, got.map(function(t){ return t.word; }));
+  });
+
   $("g-say").textContent = "";
+  saveGroups();
   drawGroups();
+}
+
+function addSolvedRow(bookKey, words){
+  var book = BOOKS[bookKey];
+  var row = document.createElement("div");
+  row.className = "solved-row " + book.cls;
+  row.innerHTML = "<b>" + book.emoji + " " + book.name + "</b><span>" + words.join("  ·  ") + "</span>";
+  $("g-solved").appendChild(row);
+}
+
+function saveGroups(){
+  saveOpen("groups", { idx:G.idx, tiles:G.tiles.map(function(t){
+    return { word:t.word, book:t.book, done:!!t.done }; }) });
 }
 
 function drawGroups(){
@@ -685,13 +733,10 @@ function checkGroup(){
   var same = books[0] === books[1] && books[1] === books[2];
 
   if(same){
-    var book = BOOKS[books[0]];
     var words = G.sel.map(function(i){ G.tiles[i].done = true; return G.tiles[i].word; });
-    var row = document.createElement("div");
-    row.className = "solved-row " + book.cls;
-    row.innerHTML = "<b>" + book.emoji + " " + book.name + "</b><span>" + words.join("  ·  ") + "</span>";
-    $("g-solved").appendChild(row);
+    addSolvedRow(books[0], words);
     G.sel = [];
+    saveGroups();
     G.found++;
     sndGood(); buzz(30);
     $("g-say").textContent = pick(PRAISE);
@@ -700,6 +745,7 @@ function checkGroup(){
 
     if(G.found === 3){
       markPuzzleDone("groups", G.idx);
+      clearOpen("groups");
       setTimeout(function(){
         if(playsLeftToday("groups") === 0){ celebrateDayOver("groups"); return; }
         celebrate("All sorted!", "You found all three groups!", "🧩", newGroups);
@@ -729,9 +775,11 @@ $("g-shuffle").onclick = function(){
   var k = 0;
   G.tiles = G.tiles.map(function(t){ return t.done ? t : mixed[k++]; });
   G.sel = [];
+  saveGroups();
   drawGroups();
 };
-$("g-next").onclick = function(){ sndTap(); newGroups(); };
+/* asking for a different puzzle is a deliberate swap, so it costs a turn */
+$("g-next").onclick = function(){ sndTap(); clearOpen("groups"); newGroups(); };
 
 /* ============================================================
    GAME 2 - Guess the Word
@@ -740,18 +788,36 @@ var W = { word:"", clue:"", book:"", idx:-1, row:0, guess:"", over:false, keys:{
 var KB_ROWS = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
 
 function newGuess(){
-  var idx = startPuzzle("guess");
-  if(idx < 0){ celebrateDayOver("guess"); return; }
+  var saved = openPuzzleFor("guess"), idx;
+  if(saved && GUESS_WORDS[saved.idx]){
+    idx = saved.idx;                       /* carry on; the turn is already spent */
+  } else {
+    idx = startPuzzle("guess");
+    if(idx < 0){ celebrateDayOver("guess"); return; }
+    saved = null;
+  }
   W.idx = idx;
   var item = GUESS_WORDS[idx];
   W.word = item.w;
   W.clue = item.c;
   W.book = item.b;
   W.row = 0; W.guess = ""; W.over = false; W.keys = {}; W.clueShown = false;
+  W.past = [];
+  if(saved){
+    /* drawBoard repaints each old guess, which colours the keyboard again too */
+    W.past = (saved.past || []).slice(0, 6);
+    W.row = W.past.length;
+    W.clueShown = !!saved.clueShown;
+  }
+  saveGuess();
   paintGuessClue();
   $("w-say").textContent = "";
   drawBoard();
   drawKeys();
+}
+
+function saveGuess(){
+  saveOpen("guess", { idx:W.idx, past:(W.past || []).slice(), clueShown:!!W.clueShown });
 }
 
 /* the clue stays hidden until it is asked for, so the game is a real guess first */
@@ -765,6 +831,7 @@ function paintGuessClue(){
     $("w-clue").querySelector(".hintbtn").onclick = function(){
       W.clueShown = true;
       sndTap();
+      saveGuess();
       paintGuessClue();
     };
   }
@@ -897,6 +964,7 @@ function typeLetter(L){
 function submitGuess(){
   W.past = W.past || [];
   W.past[W.row] = W.guess;
+  saveGuess();
   paintRow(W.row, W.guess, true);
   var won = (W.guess === W.word);
   var guessed = W.guess;
@@ -907,6 +975,7 @@ function submitGuess(){
     W.over = true;
     setTimeout(function(){
       markPuzzleDone("guess", W.idx);
+      clearOpen("guess");
       if(playsLeftToday("guess") === 0){ celebrateDayOver("guess"); return; }
       celebrate("You got it!", guessed + " in " + W.row + (W.row === 1 ? " try" : " tries") + "!",
                 "🔍", newGuess);
@@ -923,6 +992,7 @@ function submitGuess(){
       $("w-say").className = "say pop";
       sndBad();
       setTimeout(function(){
+        clearOpen("guess");          /* six goes used; the next word is a new turn */
         if(playsLeftToday("guess") === 0){
           celebrate("Good try!", "The word was " + W.word +
                     ". That is your last one for today \u2014 see you tomorrow!", "🌙", null);
@@ -958,28 +1028,53 @@ document.addEventListener("keydown", function(e){
 var X = { word:"", clue:"", book:"", idx:-1, letters:[], slots:[], hints:0, clueShown:false };
 
 function newScramble(){
-  var idx = startPuzzle("scramble");
-  if(idx < 0){ celebrateDayOver("scramble"); return; }
+  var saved = openPuzzleFor("scramble"), idx;
+  if(saved && SCRAMBLE_WORDS[saved.idx]){
+    idx = saved.idx;                       /* carry on; the turn is already spent */
+  } else {
+    idx = startPuzzle("scramble");
+    if(idx < 0){ celebrateDayOver("scramble"); return; }
+    saved = null;
+  }
   X.idx = idx;
   var item = SCRAMBLE_WORDS[idx];
   X.word = item.w;
-  X.hints = 0;
-  X.slots = X.word.split("").map(function(){ return null; });
 
-  /* mix the letters, making sure they don't come out in order */
-  var tries = 0, mixed;
-  do{
-    mixed = shuffle(X.word.split(""));
-    tries++;
-  } while(mixed.join("") === X.word && tries < 20);
-  X.letters = mixed.map(function(ch){ return { ch:ch, used:false }; });
+  if(saved && saved.letters && saved.letters.length === X.word.length){
+    X.hints = saved.hints || 0;
+    X.letters = saved.letters.map(function(l){ return { ch:l.ch, used:!!l.used }; });
+    X.slots = (saved.slots || []).map(function(sl){
+      return sl ? { ch:sl.ch, from:sl.from, locked:!!sl.locked } : null;
+    });
+    while(X.slots.length < X.word.length){ X.slots.push(null); }
+  } else {
+    X.hints = 0;
+    X.slots = X.word.split("").map(function(){ return null; });
+    /* mix the letters, making sure they don't come out in order */
+    var tries = 0, mixed;
+    do{
+      mixed = shuffle(X.word.split(""));
+      tries++;
+    } while(mixed.join("") === X.word && tries < 20);
+    X.letters = mixed.map(function(ch){ return { ch:ch, used:false }; });
+  }
 
   X.clue = item.c;
   X.book = item.b;
-  X.clueShown = false;
+  X.clueShown = saved ? !!saved.clueShown : false;
+  saveScramble();
   paintScrambleClue();
   $("x-say").textContent = "";
   drawScramble();
+}
+
+function saveScramble(){
+  saveOpen("scramble", {
+    idx:X.idx, hints:X.hints, clueShown:!!X.clueShown,
+    letters:X.letters.map(function(l){ return { ch:l.ch, used:!!l.used }; }),
+    slots:X.slots.map(function(sl){
+      return sl ? { ch:sl.ch, from:sl.from, locked:!!sl.locked } : null; })
+  });
 }
 
 function paintScrambleClue(){
@@ -995,6 +1090,7 @@ function paintScrambleClue(){
 function showScrambleClue(){
   X.clueShown = true;
   sndTap();
+  saveScramble();
   paintScrambleClue();
 }
 
@@ -1031,6 +1127,7 @@ function placeLetter(i){
   X.slots[slot] = { ch:l.ch, from:i };
   l.used = true;
   sndTap();
+  saveScramble();
   drawScramble();
   if(X.slots.every(function(s){ return s; })){ setTimeout(checkScramble, 250); }
 }
@@ -1041,6 +1138,7 @@ function takeBack(i){
   X.letters[s.from].used = false;
   X.slots[i] = null;
   sndTap();
+  saveScramble();
   drawScramble();
 }
 
@@ -1048,6 +1146,7 @@ function checkScramble(){
   var made = X.slots.map(function(s){ return s.ch; }).join("");
   if(made === X.word){
     markPuzzleDone("scramble", X.idx);
+    clearOpen("scramble");
     X.slots.forEach(function(s){ s.locked = true; });
     drawScramble();
     setTimeout(function(){
@@ -1089,13 +1188,14 @@ $("x-hint").onclick = function(){
     }
   }
   X.hints++;
+  saveScramble();
   sndGood();
   $("x-say").textContent = "There you go!";
   $("x-say").className = "say pop";
   drawScramble();
   if(X.slots.every(function(s){ return s; })){ setTimeout(checkScramble, 300); }
 };
-$("x-next").onclick = function(){ sndTap(); newScramble(); };
+$("x-next").onclick = function(){ sndTap(); clearOpen("scramble"); newScramble(); };
 
 /* ============================================================
    sound on / off

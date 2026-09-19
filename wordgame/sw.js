@@ -1,6 +1,6 @@
 /* Words Quest offline cache.
    Bump CACHE when the game changes so phones pick up the new version. */
-var CACHE = "wordquest-v6";
+var CACHE = "wordquest-v7";
 var FILES = [
   "./",
   "./index.html",
