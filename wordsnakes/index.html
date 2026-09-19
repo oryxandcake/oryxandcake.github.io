@@ -62,7 +62,9 @@
               display:flex; align-items:center; justify-content:center; font-weight:bold; flex:none;}
   .pcard b{display:block; font-size:17px;}
   .pcard span{font-size:12.5px; opacity:.7;}
-  .pcard .state{margin-left:auto; font-size:20px;}
+  .pcard .state{margin-left:auto; font-size:20px; flex:none; text-align:center;}
+  .pcard .state .part{display:block; font-size:11px; font-style:normal; font-weight:bold;
+                      opacity:.6; line-height:1.2;}
   .note{margin-top:14px; font-size:12.5px; opacity:.8; text-align:center; line-height:1.6;}
 
   /* ---------------- play ---------------- */
@@ -221,6 +223,7 @@ var store = {
 };
 var state = store.read();
 if(!state.done){ state.done = {}; }
+if(!state.inprog){ state.inprog = {}; }   /* boards left half finished */
 if(typeof state.sound !== "boolean"){ state.sound = true; }
 
 /* ---------- sound, made in the browser so nothing needs downloading ---------- */
@@ -269,6 +272,35 @@ function toast(msg){
   t._timer = setTimeout(function(){ t.classList.remove("on"); }, 1500);
 }
 
+/* A board you leave half done keeps what you had found: the answers, the
+   ordinary words you had spotted and any hint owing. Only finished boards
+   used to be saved, so walking away wiped the lot. */
+function saveProgress(){
+  if(!P || state.done[P.id]){ return; }
+  var found = Object.keys(solved), extras = Object.keys(bonusWords);
+  if(!found.length && !extras.length && !bonusCount && !hintsReady){
+    delete state.inprog[P.id];
+  } else {
+    state.inprog[P.id] = { solved:found, bonus:extras, count:bonusCount, hints:hintsReady };
+  }
+  store.write(state);
+}
+
+function loadProgress(){
+  var saved = state.inprog[P.id];
+  if(!saved || state.done[P.id]){ return; }
+  (saved.solved || []).forEach(function(word){
+    P.answers.forEach(function(a){
+      if(a.word !== word){ return; }
+      solved[word] = true;
+      a.path.forEach(function(c){ cellOwner[c] = word; });
+    });
+  });
+  (saved.bonus || []).forEach(function(word){ bonusWords[word] = true; });
+  bonusCount = saved.count || 0;
+  hintsReady = saved.hints || 0;
+}
+
 /* ---------- the menu ---------- */
 function paintMenu(){
   var list = $("plist");
@@ -276,9 +308,14 @@ function paintMenu(){
   PUZZLES.forEach(function(p, i){
     var b = document.createElement("button");
     b.className = "pcard";
+    var part = state.inprog[p.id];
+    var mark = state.done[p.id] ? "✅"
+             : (part && part.solved && part.solved.length
+                 ? "<i class='part'>" + part.solved.length + " of " + p.answers.length + "<br>found</i>"
+                 : "");
     b.innerHTML = "<span class='num'>" + (i+1) + "</span>" +
                   "<span><b>" + p.theme + "</b><span>" + p.clue + "</span></span>" +
-                  "<span class='state'>" + (state.done[p.id] ? "✅" : "") + "</span>";
+                  "<span class='state'>" + mark + "</span>";
     b.onclick = function(){ sndTick(); openPuzzle(i); };
     list.appendChild(b);
   });
@@ -312,6 +349,8 @@ function openPuzzle(i){
   cellOwner = new Array(N);
   sel = [];
   bonusWords = {}; bonusCount = 0; hintsReady = 0; hintWord = null;
+
+  loadProgress();
 
   $("c-theme").textContent = P.theme;
   $("c-clue").textContent = P.clue;
@@ -505,6 +544,7 @@ function submit(){
     bonusWords[bonus] = true;
     bonusCount++;
     sndBonus(); buzz(20);
+    saveProgress();
     if(bonusCount % 3 === 0){
       hintsReady++;
       toast(bonus + "! That is a hint earned 💡");
@@ -537,8 +577,11 @@ function lockIn(answer){
 
   if(Object.keys(solved).length === P.answers.length){
     state.done[P.id] = true;
+    delete state.inprog[P.id];
     store.write(state);
     setTimeout(finish, 550);
+  } else {
+    saveProgress();
   }
 }
 
@@ -571,6 +614,7 @@ $("hint").onclick = function(){
   var fresh = left.filter(function(a){ return !hintWord || a.word !== hintWord.word; });
   hintWord = (fresh.length ? fresh : left)[Math.floor(Math.random() * (fresh.length ? fresh.length : left.length))];
   hintsReady--;
+  saveProgress();
   sndGood();
   toast("These letters make one answer");
   paintAll();

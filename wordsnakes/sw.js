@@ -1,6 +1,6 @@
 /* Word Snakes offline cache.
    Bump CACHE when the game changes so phones pick up the new version. */
-var CACHE = "wordsnakes-v1";
+var CACHE = "wordsnakes-v2";
 var FILES = [
   "./",
   "./index.html",
